@@ -14,7 +14,6 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.loader import async_get_loaded_integration
 
 from .api import SuperiorPlusPropaneApiClient
-from .const import DOMAIN, LOGGER, CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
 from .coordinator import SuperiorPlusPropaneDataUpdateCoordinator
 from .data import SuperiorPlusPropaneData
 

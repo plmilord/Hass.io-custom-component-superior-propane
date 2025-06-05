@@ -3,22 +3,24 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any, Dict, List
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.exceptions import ConfigEntryAuthFailed
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.helpers.storage import Store
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import (
     SuperiorPlusPropaneApiClientAuthenticationError,
     SuperiorPlusPropaneApiClientError,
 )
-from .const import LOGGER, GALLONS_TO_CUBIC_FEET
+from .const import GALLONS_TO_CUBIC_FEET, LOGGER
 
 STORAGE_VERSION = 1
 STORAGE_KEY = "superior_plus_propane_consumption"
 
 if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+
     from .data import SuperiorPlusPropaneConfigEntry
 
 
@@ -27,7 +29,11 @@ class SuperiorPlusPropaneDataUpdateCoordinator(DataUpdateCoordinator):
 
     config_entry: SuperiorPlusPropaneConfigEntry
 
-    def __init__(self, hass, config_entry):
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        config_entry: SuperiorPlusPropaneConfigEntry,
+    ) -> None:
         """Initialize the coordinator."""
         super().__init__(
             hass,
@@ -38,8 +44,8 @@ class SuperiorPlusPropaneDataUpdateCoordinator(DataUpdateCoordinator):
             ),
         )
         self.config_entry = config_entry
-        self._previous_readings: Dict[str, float] = {}
-        self._consumption_totals: Dict[str, float] = {}
+        self._previous_readings: dict[str, float] = {}
+        self._consumption_totals: dict[str, float] = {}
         self._store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
 
     async def async_load_consumption_data(self) -> None:
@@ -59,7 +65,7 @@ class SuperiorPlusPropaneDataUpdateCoordinator(DataUpdateCoordinator):
         await self._store.async_save(data)
         LOGGER.debug("Saved consumption data: %s", self._consumption_totals)
 
-    async def _async_update_data(self) -> List[Dict[str, Any]]:
+    async def _async_update_data(self) -> list[dict[str, Any]]:
         """Update data via library."""
         try:
             tanks_data = (

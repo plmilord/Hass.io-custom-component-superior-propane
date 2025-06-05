@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -21,7 +21,7 @@ class SuperiorPlusPropaneEntity(
     def __init__(
         self,
         coordinator: SuperiorPlusPropaneDataUpdateCoordinator,
-        tank_data: Dict[str, Any],
+        tank_data: dict[str, Any],
     ) -> None:
         """Initialize."""
         super().__init__(coordinator)
@@ -39,7 +39,7 @@ class SuperiorPlusPropaneEntity(
             sw_version="1.0",
         )
 
-    def _get_tank_data(self) -> Dict[str, Any] | None:
+    def _get_tank_data(self) -> dict[str, Any] | None:
         """Get current tank data from coordinator."""
         if not self.coordinator.data:
             return None

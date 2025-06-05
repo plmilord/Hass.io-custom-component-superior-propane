@@ -15,7 +15,7 @@ from .api import (
     SuperiorPlusPropaneApiClientCommunicationError,
     SuperiorPlusPropaneApiClientError,
 )
-from .const import DOMAIN, LOGGER, CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
+from .const import CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL, DOMAIN, LOGGER
 
 
 class SuperiorPlusPropaneFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):

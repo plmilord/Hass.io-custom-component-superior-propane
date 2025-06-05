@@ -3,25 +3,26 @@
 from __future__ import annotations
 
 import re
-import socket
-from datetime import datetime
-from typing import Any, Dict, List, Union
-from urllib.parse import urljoin
+from typing import TYPE_CHECKING, Any
 
-import aiohttp
 import async_timeout
 from bs4 import BeautifulSoup, Tag
 from slugify import slugify
 
 from .const import (
-    GALLONS_TO_CUBIC_FEET,
+    CUSTOMERS_URL,
+    HOME_URL,
+    LOGGER,
     LOGIN_PAGE_URL,
     LOGIN_URL,
-    HOME_URL,
-    CUSTOMERS_URL,
     TANK_URL,
-    LOGGER,
 )
+
+if TYPE_CHECKING:
+    import aiohttp
+
+# HTTP Status Codes
+HTTP_OK = 200
 
 
 class SuperiorPlusPropaneApiClientError(Exception):
@@ -71,7 +72,7 @@ class SuperiorPlusPropaneApiClient:
             "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
         }
 
-    async def async_get_tanks_data(self) -> List[Dict[str, Any]]:
+    async def async_get_tanks_data(self) -> list[dict[str, Any]]:
         """Get tank data from Superior Plus Propane."""
         try:
             # Step 1: Get CSRF token from login page
@@ -81,17 +82,14 @@ class SuperiorPlusPropaneApiClient:
             await self._login(csrf_token)
 
             # Step 3: Navigate to tank page and get data
-            tanks_data = await self._get_tanks_from_page()
-
-            return tanks_data
+            return await self._get_tanks_from_page()
 
         except SuperiorPlusPropaneApiClientAuthenticationError:
             raise
         except Exception as exception:
             LOGGER.exception("Error getting tank data: %s", exception)
-            raise SuperiorPlusPropaneApiClientError(
-                f"Failed to get tank data: {exception}"
-            ) from exception
+            msg = f"Failed to get tank data: {exception}"
+            raise SuperiorPlusPropaneApiClientError(msg) from exception
 
     async def _get_csrf_token(self) -> str:
         """Get CSRF token from login page."""
@@ -100,10 +98,9 @@ class SuperiorPlusPropaneApiClient:
                 response = await self._session.get(
                     LOGIN_PAGE_URL, headers=self._headers
                 )
-                if response.status != 200:
-                    raise SuperiorPlusPropaneApiClientCommunicationError(
-                        f"Failed to get login page: {response.status}"
-                    )
+                if response.status != HTTP_OK:
+                    msg = f"Failed to get login page: {response.status}"
+                    raise SuperiorPlusPropaneApiClientCommunicationError(msg)
 
                 html = await response.text()
                 soup = BeautifulSoup(html, "html.parser")
@@ -112,20 +109,19 @@ class SuperiorPlusPropaneApiClient:
                     "input", {"name": "__RequestVerificationToken"}
                 )
                 if not csrf_element or not hasattr(csrf_element, "get"):
-                    raise SuperiorPlusPropaneApiClientError("CSRF token not found")
+                    msg = "CSRF token not found"
+                    raise SuperiorPlusPropaneApiClientError(msg)
 
                 csrf_value = csrf_element.get("value")
                 if not csrf_value:
-                    raise SuperiorPlusPropaneApiClientError(
-                        "CSRF token value not found"
-                    )
+                    msg = "CSRF token value not found"
+                    raise SuperiorPlusPropaneApiClientError(msg)
 
                 return str(csrf_value)
 
         except TimeoutError as exception:
-            raise SuperiorPlusPropaneApiClientCommunicationError(
-                f"Timeout getting CSRF token: {exception}"
-            ) from exception
+            msg = f"Timeout getting CSRF token: {exception}"
+            raise SuperiorPlusPropaneApiClientCommunicationError(msg) from exception
 
     async def _login(self, csrf_token: str) -> None:
         """Login to Superior Plus Propane."""
@@ -145,10 +141,9 @@ class SuperiorPlusPropaneApiClient:
 
                 # Check if login was successful by looking at redirect URL
                 # If still on login page, authentication failed
-                if "Login" in str(response.url) or response.status != 200:
-                    raise SuperiorPlusPropaneApiClientAuthenticationError(
-                        "Login failed - invalid credentials"
-                    )
+                if "Login" in str(response.url) or response.status != HTTP_OK:
+                    msg = "Login failed - invalid credentials"
+                    raise SuperiorPlusPropaneApiClientAuthenticationError(msg)
 
             # Navigate through required pages with longer timeouts
             LOGGER.debug("Login successful, navigating to required pages...")
@@ -161,19 +156,17 @@ class SuperiorPlusPropaneApiClient:
                 LOGGER.debug("Successfully navigated to CUSTOMERS_URL")
 
         except TimeoutError as exception:
-            raise SuperiorPlusPropaneApiClientCommunicationError(
-                f"Timeout during login: {exception}"
-            ) from exception
+            msg = f"Timeout during login: {exception}"
+            raise SuperiorPlusPropaneApiClientCommunicationError(msg) from exception
 
-    async def _get_tanks_from_page(self) -> List[Dict[str, Any]]:
+    async def _get_tanks_from_page(self) -> list[dict[str, Any]]:
         """Get tank data from the tank page."""
         try:
             async with async_timeout.timeout(10):
                 response = await self._session.get(TANK_URL, headers=self._headers)
-                if response.status != 200:
-                    raise SuperiorPlusPropaneApiClientCommunicationError(
-                        f"Failed to get tank page: {response.status}"
-                    )
+                if response.status != HTTP_OK:
+                    msg = f"Failed to get tank page: {response.status}"
+                    raise SuperiorPlusPropaneApiClientCommunicationError(msg)
 
                 html = await response.text()
                 soup = BeautifulSoup(html, "html.parser")
@@ -188,18 +181,18 @@ class SuperiorPlusPropaneApiClient:
                         tanks_data.append(tank_data)
 
                 if not tanks_data:
-                    raise SuperiorPlusPropaneApiClientError("No tanks found")
+                    msg = "No tanks found"
+                    raise SuperiorPlusPropaneApiClientError(msg)
 
                 return tanks_data
 
         except TimeoutError as exception:
-            raise SuperiorPlusPropaneApiClientCommunicationError(
-                f"Timeout getting tank data: {exception}"
-            ) from exception
+            msg = f"Timeout getting tank data: {exception}"
+            raise SuperiorPlusPropaneApiClientCommunicationError(msg) from exception
 
     async def _parse_tank_row(
         self, row: Tag, tank_number: int
-    ) -> Dict[str, Any] | None:
+    ) -> dict[str, Any] | None:
         """Parse a single tank row."""
         try:
             # Extract tank address from col-md-2

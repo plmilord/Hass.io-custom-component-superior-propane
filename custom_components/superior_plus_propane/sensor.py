@@ -2,27 +2,27 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
-    SensorEntityDescription,
     SensorStateClass,
 )
 from homeassistant.const import (
-    PERCENTAGE,
-    UnitOfVolume,
     CURRENCY_DOLLAR,
+    PERCENTAGE,
     UnitOfTime,
+    UnitOfVolume,
 )
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .entity import SuperiorPlusPropaneEntity
 from .const import DOMAIN, LOGGER
+from .entity import SuperiorPlusPropaneEntity
 
 if TYPE_CHECKING:
+    from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
     from .coordinator import SuperiorPlusPropaneDataUpdateCoordinator
     from .data import SuperiorPlusPropaneConfigEntry
 
@@ -79,7 +79,7 @@ class SuperiorPlusPropaneLevelSensor(SuperiorPlusPropaneEntity, SensorEntity):
     def __init__(
         self,
         coordinator: SuperiorPlusPropaneDataUpdateCoordinator,
-        tank_data: Dict[str, Any],
+        tank_data: dict[str, Any],
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator, tank_data)
@@ -113,7 +113,7 @@ class SuperiorPlusPropaneGallonsSensor(SuperiorPlusPropaneEntity, SensorEntity):
     def __init__(
         self,
         coordinator: SuperiorPlusPropaneDataUpdateCoordinator,
-        tank_data: Dict[str, Any],
+        tank_data: dict[str, Any],
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator, tank_data)
@@ -147,7 +147,7 @@ class SuperiorPlusPropaneCapacitySensor(SuperiorPlusPropaneEntity, SensorEntity)
     def __init__(
         self,
         coordinator: SuperiorPlusPropaneDataUpdateCoordinator,
-        tank_data: Dict[str, Any],
+        tank_data: dict[str, Any],
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator, tank_data)
@@ -181,7 +181,7 @@ class SuperiorPlusPropaneReadingDateSensor(SuperiorPlusPropaneEntity, SensorEnti
     def __init__(
         self,
         coordinator: SuperiorPlusPropaneDataUpdateCoordinator,
-        tank_data: Dict[str, Any],
+        tank_data: dict[str, Any],
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator, tank_data)
@@ -207,7 +207,7 @@ class SuperiorPlusPropaneLastDeliverySensor(SuperiorPlusPropaneEntity, SensorEnt
     def __init__(
         self,
         coordinator: SuperiorPlusPropaneDataUpdateCoordinator,
-        tank_data: Dict[str, Any],
+        tank_data: dict[str, Any],
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator, tank_data)
@@ -233,7 +233,7 @@ class SuperiorPlusPropanePriceSensor(SuperiorPlusPropaneEntity, SensorEntity):
     def __init__(
         self,
         coordinator: SuperiorPlusPropaneDataUpdateCoordinator,
-        tank_data: Dict[str, Any],
+        tank_data: dict[str, Any],
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator, tank_data)
@@ -269,7 +269,7 @@ class SuperiorPlusPropaneDaysSinceDeliverySensor(
     def __init__(
         self,
         coordinator: SuperiorPlusPropaneDataUpdateCoordinator,
-        tank_data: Dict[str, Any],
+        tank_data: dict[str, Any],
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator, tank_data)
@@ -305,7 +305,7 @@ class SuperiorPlusPropaneConsumptionTotalSensor(
     def __init__(
         self,
         coordinator: SuperiorPlusPropaneDataUpdateCoordinator,
-        tank_data: Dict[str, Any],
+        tank_data: dict[str, Any],
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator, tank_data)
@@ -332,7 +332,7 @@ class SuperiorPlusPropaneConsumptionRateSensor(SuperiorPlusPropaneEntity, Sensor
     def __init__(
         self,
         coordinator: SuperiorPlusPropaneDataUpdateCoordinator,
-        tank_data: Dict[str, Any],
+        tank_data: dict[str, Any],
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator, tank_data)
