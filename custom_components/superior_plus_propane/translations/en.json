@@ -1,0 +1,23 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "Superior Plus Propane",
+                "description": "Enter your Superior Plus Propane account credentials to configure the integration.",
+                "data": {
+                    "username": "Email Address",
+                    "password": "Password",
+                    "update_interval": "Update Interval (seconds)"
+                }
+            }
+        },
+        "error": {
+            "auth": "Invalid credentials. Please check your email and password.",
+            "connection": "Unable to connect to Superior Plus Propane servers.",
+            "unknown": "Unknown error occurred."
+        },
+        "abort": {
+            "already_configured": "This Superior Plus Propane account is already configured."
+        }
+    }
+}

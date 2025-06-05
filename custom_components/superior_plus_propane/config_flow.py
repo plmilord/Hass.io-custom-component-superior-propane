@@ -1,4 +1,4 @@
-"""Adds config flow for Blueprint."""
+"""Adds config flow for Superior Plus Propane."""
 
 from __future__ import annotations
 
@@ -10,16 +10,16 @@ from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from slugify import slugify
 
 from .api import (
-    IntegrationBlueprintApiClient,
-    IntegrationBlueprintApiClientAuthenticationError,
-    IntegrationBlueprintApiClientCommunicationError,
-    IntegrationBlueprintApiClientError,
+    SuperiorPlusPropaneApiClient,
+    SuperiorPlusPropaneApiClientAuthenticationError,
+    SuperiorPlusPropaneApiClientCommunicationError,
+    SuperiorPlusPropaneApiClientError,
 )
-from .const import DOMAIN, LOGGER
+from .const import DOMAIN, LOGGER, CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
 
 
-class BlueprintFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
-    """Config flow for Blueprint."""
+class SuperiorPlusPropaneFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
+    """Config flow for Superior Plus Propane."""
 
     VERSION = 1
 
@@ -35,25 +35,20 @@ class BlueprintFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                     username=user_input[CONF_USERNAME],
                     password=user_input[CONF_PASSWORD],
                 )
-            except IntegrationBlueprintApiClientAuthenticationError as exception:
+            except SuperiorPlusPropaneApiClientAuthenticationError as exception:
                 LOGGER.warning(exception)
                 _errors["base"] = "auth"
-            except IntegrationBlueprintApiClientCommunicationError as exception:
+            except SuperiorPlusPropaneApiClientCommunicationError as exception:
                 LOGGER.error(exception)
                 _errors["base"] = "connection"
-            except IntegrationBlueprintApiClientError as exception:
+            except SuperiorPlusPropaneApiClientError as exception:
                 LOGGER.exception(exception)
                 _errors["base"] = "unknown"
             else:
-                await self.async_set_unique_id(
-                    ## Do NOT use this in production code
-                    ## The unique_id should never be something that can change
-                    ## https://developers.home-assistant.io/docs/config_entries_config_flow_handler#unique-ids
-                    unique_id=slugify(user_input[CONF_USERNAME])
-                )
+                await self.async_set_unique_id(slugify(user_input[CONF_USERNAME]))
                 self._abort_if_unique_id_configured()
                 return self.async_create_entry(
-                    title=user_input[CONF_USERNAME],
+                    title=f"Superior Plus Propane ({user_input[CONF_USERNAME]})",
                     data=user_input,
                 )
 
@@ -66,12 +61,24 @@ class BlueprintFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                         default=(user_input or {}).get(CONF_USERNAME, vol.UNDEFINED),
                     ): selector.TextSelector(
                         selector.TextSelectorConfig(
-                            type=selector.TextSelectorType.TEXT,
+                            type=selector.TextSelectorType.EMAIL,
                         ),
                     ),
                     vol.Required(CONF_PASSWORD): selector.TextSelector(
                         selector.TextSelectorConfig(
                             type=selector.TextSelectorType.PASSWORD,
+                        ),
+                    ),
+                    vol.Optional(
+                        CONF_UPDATE_INTERVAL,
+                        default=DEFAULT_UPDATE_INTERVAL,
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=300,  # Minimum 5 minutes
+                            max=86400,  # Maximum 24 hours
+                            step=300,  # 5 minute steps
+                            unit_of_measurement="seconds",
+                            mode=selector.NumberSelectorMode.BOX,
                         ),
                     ),
                 },
@@ -81,9 +88,9 @@ class BlueprintFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def _test_credentials(self, username: str, password: str) -> None:
         """Validate credentials."""
-        client = IntegrationBlueprintApiClient(
+        client = SuperiorPlusPropaneApiClient(
             username=username,
             password=password,
             session=async_create_clientsession(self.hass),
         )
-        await client.async_get_data()
+        await client.async_test_connection()
