@@ -121,7 +121,7 @@ class SuperiorPlusPropaneGallonsSensor(SuperiorPlusPropaneEntity, SensorEntity):
         self._attr_name = f"{tank_data['address']} Current Gallons"
         self._attr_native_unit_of_measurement = UnitOfVolume.GALLONS
         self._attr_device_class = SensorDeviceClass.VOLUME
-        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_state_class = None
         self._attr_icon = "mdi:propane-tank"
 
     @property
@@ -241,7 +241,7 @@ class SuperiorPlusPropanePriceSensor(SuperiorPlusPropaneEntity, SensorEntity):
         self._attr_name = f"{tank_data['address']} Price per Gallon"
         self._attr_native_unit_of_measurement = f"{CURRENCY_DOLLAR}/gal"
         self._attr_device_class = SensorDeviceClass.MONETARY
-        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_state_class = None
         self._attr_icon = "mdi:currency-usd"
 
     @property
