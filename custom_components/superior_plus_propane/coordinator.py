@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.exceptions import ConfigEntryAuthFailed
@@ -128,8 +128,6 @@ class SuperiorPlusPropaneDataUpdateCoordinator(DataUpdateCoordinator):
         last_delivery = tank.get("last_delivery", "unknown")
         if last_delivery != "unknown":
             try:
-                from datetime import datetime
-
                 delivery_date = datetime.strptime(last_delivery, "%m/%d/%Y").replace(
                     tzinfo=UTC
                 )
