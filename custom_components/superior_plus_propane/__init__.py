@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from homeassistant.loader import async_get_loaded_integration
 
 from .api import SuperiorPlusPropaneApiClient
@@ -42,7 +42,7 @@ async def async_setup_entry(
         client=SuperiorPlusPropaneApiClient(
             username=entry.data[CONF_USERNAME],
             password=entry.data[CONF_PASSWORD],
-            session=async_get_clientsession(hass),
+            session=async_create_clientsession(hass),
         ),
         integration=async_get_loaded_integration(hass, entry.domain),
         coordinator=coordinator,
@@ -65,6 +65,10 @@ async def async_unload_entry(
     entry: SuperiorPlusPropaneConfigEntry,
 ) -> bool:
     """Handle removal of an entry."""
+    # Close the dedicated session to clean up resources
+    if hasattr(entry.runtime_data.client, "_session"):
+        await entry.runtime_data.client._session.close()
+
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 

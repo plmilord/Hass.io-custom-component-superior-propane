@@ -54,6 +54,8 @@ class SuperiorPlusPropaneApiClient:
         self._username = username
         self._password = password
         self._session = session
+        self._authenticated = False
+        self._auth_in_progress = False
         self._headers = {
             "accept": (
                 "text/html,application/xhtml+xml,application/xml;q=0.9,"
@@ -85,21 +87,67 @@ class SuperiorPlusPropaneApiClient:
     async def async_get_tanks_data(self) -> list[dict[str, Any]]:
         """Get tank data from Superior Plus Propane."""
         try:
+            # Ensure we have a valid authenticated session
+            await self._ensure_authenticated()
+
+            # Get tank data using existing session
+            return await self._get_tanks_from_page()
+
+        except SuperiorPlusPropaneApiClientAuthenticationError:
+            # If authentication fails, reset state and retry once
+            LOGGER.debug("Authentication failed, attempting to re-authenticate")
+            self._authenticated = False
+            await self._ensure_authenticated()
+            return await self._get_tanks_from_page()
+        except Exception as exception:
+            LOGGER.exception("Error getting tank data: %s", exception)
+            msg = f"Failed to get tank data: {exception}"
+            raise SuperiorPlusPropaneApiClientError(msg) from exception
+
+    async def _ensure_authenticated(self) -> None:
+        """Ensure we have a valid authenticated session."""
+        if self._authenticated:
+            # Try to validate current session by accessing a protected page
+            try:
+                async with async_timeout.timeout(10):
+                    response = await self._session.get(HOME_URL, headers=self._headers)
+                    if response.status == HTTP_OK and "Login" not in str(response.url):
+                        LOGGER.debug("Session still valid, skipping authentication")
+                        return
+                    else:
+                        LOGGER.debug("Session invalid, need to re-authenticate")
+                        self._authenticated = False
+            except Exception:
+                LOGGER.debug("Session validation failed, need to re-authenticate")
+                self._authenticated = False
+
+        if not self._authenticated and not self._auth_in_progress:
+            await self._authenticate()
+
+    async def _authenticate(self) -> None:
+        """Perform full authentication sequence."""
+        if self._auth_in_progress:
+            return
+
+        self._auth_in_progress = True
+        try:
+            LOGGER.debug("Starting authentication sequence")
+
             # Step 1: Get CSRF token from login page
             csrf_token = await self._get_csrf_token()
 
             # Step 2: Login with credentials
             await self._login(csrf_token)
 
-            # Step 3: Navigate to tank page and get data
-            return await self._get_tanks_from_page()
+            # Mark as authenticated
+            self._authenticated = True
+            LOGGER.debug("Authentication completed successfully")
 
-        except SuperiorPlusPropaneApiClientAuthenticationError:
+        except Exception:
+            self._authenticated = False
             raise
-        except Exception as exception:
-            LOGGER.exception("Error getting tank data: %s", exception)
-            msg = f"Failed to get tank data: {exception}"
-            raise SuperiorPlusPropaneApiClientError(msg) from exception
+        finally:
+            self._auth_in_progress = False
 
     async def _get_csrf_token(self) -> str:
         """Get CSRF token from login page."""
@@ -118,7 +166,7 @@ class SuperiorPlusPropaneApiClient:
                 csrf_element = soup.find(
                     "input", {"name": "__RequestVerificationToken"}
                 )
-                if not csrf_element or not hasattr(csrf_element, "get"):
+                if not csrf_element or not isinstance(csrf_element, Tag):
                     msg = "CSRF token not found"
                     raise SuperiorPlusPropaneApiClientError(msg)
 
@@ -126,6 +174,12 @@ class SuperiorPlusPropaneApiClient:
                 if not csrf_value:
                     msg = "CSRF token value not found"
                     raise SuperiorPlusPropaneApiClientError(msg)
+
+                if isinstance(csrf_value, list):
+                    csrf_value = csrf_value[0] if csrf_value else None
+                    if not csrf_value:
+                        msg = "CSRF token value not found"
+                        raise SuperiorPlusPropaneApiClientError(msg)
 
                 return str(csrf_value)
 
@@ -174,12 +228,30 @@ class SuperiorPlusPropaneApiClient:
         try:
             async with async_timeout.timeout(10):
                 response = await self._session.get(TANK_URL, headers=self._headers)
+
+                # Check if we were redirected to login page (session expired)
+                if "Login" in str(response.url):
+                    LOGGER.debug("Redirected to login page, session expired")
+                    self._authenticated = False
+                    raise SuperiorPlusPropaneApiClientAuthenticationError(
+                        "Session expired"
+                    )
+
                 if response.status != HTTP_OK:
                     msg = f"Failed to get tank page: {response.status}"
                     raise SuperiorPlusPropaneApiClientCommunicationError(msg)
 
                 html = await response.text()
                 soup = BeautifulSoup(html, "html.parser")
+
+                # Check if page contains login form (another indicator of expired session)
+                login_form = soup.find("form", {"action": "/Account/Login"})
+                if login_form:
+                    LOGGER.debug("Login form found on tank page, session expired")
+                    self._authenticated = False
+                    raise SuperiorPlusPropaneApiClientAuthenticationError(
+                        "Session expired"
+                    )
 
                 # Find all tank rows
                 tank_rows = soup.select("div.tank-row")
@@ -232,7 +304,10 @@ class SuperiorPlusPropaneApiClient:
         """Extract level percentage from progress bar."""
         progress_bar = row.select_one("div.progress-bar")
         if progress_bar and progress_bar.get("aria-valuenow"):
-            return progress_bar["aria-valuenow"]
+            value = progress_bar.get("aria-valuenow")
+            if isinstance(value, list):
+                return value[0] if value else "unknown"
+            return str(value) if value else "unknown"
         return "unknown"
 
     def _extract_gallons(self, row: Tag) -> str:
