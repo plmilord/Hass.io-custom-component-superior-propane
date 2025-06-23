@@ -18,6 +18,9 @@ from .const import (
     TANK_URL,
 )
 
+# Error messages
+SESSION_EXPIRED_MSG = "Session expired"
+
 if TYPE_CHECKING:
     import aiohttp
 
@@ -114,10 +117,9 @@ class SuperiorPlusPropaneApiClient:
                     if response.status == HTTP_OK and "Login" not in str(response.url):
                         LOGGER.debug("Session still valid, skipping authentication")
                         return
-                    else:
-                        LOGGER.debug("Session invalid, need to re-authenticate")
-                        self._authenticated = False
-            except Exception:
+                    LOGGER.debug("Session invalid, need to re-authenticate")
+                    self._authenticated = False
+            except (TimeoutError, Exception):
                 LOGGER.debug("Session validation failed, need to re-authenticate")
                 self._authenticated = False
 
@@ -234,7 +236,7 @@ class SuperiorPlusPropaneApiClient:
                     LOGGER.debug("Redirected to login page, session expired")
                     self._authenticated = False
                     raise SuperiorPlusPropaneApiClientAuthenticationError(
-                        "Session expired"
+                        SESSION_EXPIRED_MSG
                     )
 
                 if response.status != HTTP_OK:
@@ -244,13 +246,13 @@ class SuperiorPlusPropaneApiClient:
                 html = await response.text()
                 soup = BeautifulSoup(html, "html.parser")
 
-                # Check if page contains login form (another indicator of expired session)
+                # Check if page contains login form (expired session indicator)
                 login_form = soup.find("form", {"action": "/Account/Login"})
                 if login_form:
                     LOGGER.debug("Login form found on tank page, session expired")
                     self._authenticated = False
                     raise SuperiorPlusPropaneApiClientAuthenticationError(
-                        "Session expired"
+                        SESSION_EXPIRED_MSG
                     )
 
                 # Find all tank rows

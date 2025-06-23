@@ -66,8 +66,10 @@ async def async_unload_entry(
 ) -> bool:
     """Handle removal of an entry."""
     # Close the dedicated session to clean up resources
-    if hasattr(entry.runtime_data.client, "_session"):
-        await entry.runtime_data.client._session.close()
+    if entry.runtime_data and entry.runtime_data.client:
+        session = getattr(entry.runtime_data.client, "_session", None)
+        if session and hasattr(session, "close"):
+            await session.close()
 
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
