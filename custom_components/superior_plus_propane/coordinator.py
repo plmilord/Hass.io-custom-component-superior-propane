@@ -15,7 +15,7 @@ from .api import (
 )
 from .const import GALLONS_TO_CUBIC_FEET, LOGGER
 
-STORAGE_VERSION = 2  # Incremented due to conversion factor fix
+STORAGE_VERSION = 1
 STORAGE_KEY = "superior_plus_propane_consumption"
 
 # Consumption tracking constants
