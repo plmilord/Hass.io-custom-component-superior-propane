@@ -21,4 +21,4 @@ DEFAULT_UPDATE_INTERVAL = 3600  # 1 hour
 CONF_UPDATE_INTERVAL = "update_interval"
 
 # Unit conversions
-GALLONS_TO_CUBIC_FEET = 0.1337  # Propane gallon to cubic feet conversion
+GALLONS_TO_CUBIC_FEET = 36.39  # Propane gallon to cubic feet conversion (at STP)
