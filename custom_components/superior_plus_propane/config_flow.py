@@ -15,7 +15,17 @@ from .api import (
     SuperiorPlusPropaneApiClientCommunicationError,
     SuperiorPlusPropaneApiClientError,
 )
-from .const import CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL, DOMAIN, LOGGER
+from .const import (
+    CONF_ADAPTIVE_THRESHOLDS,
+    CONF_MAX_THRESHOLD,
+    CONF_MIN_THRESHOLD,
+    CONF_UPDATE_INTERVAL,
+    DEFAULT_MAX_CONSUMPTION_GALLONS,
+    DEFAULT_MIN_CONSUMPTION_GALLONS,
+    DEFAULT_UPDATE_INTERVAL,
+    DOMAIN,
+    LOGGER,
+)
 
 
 class SuperiorPlusPropaneFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
@@ -81,6 +91,34 @@ class SuperiorPlusPropaneFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                             mode=selector.NumberSelectorMode.BOX,
                         ),
                     ),
+                    vol.Optional(
+                        CONF_ADAPTIVE_THRESHOLDS,
+                        default=True,
+                    ): selector.BooleanSelector(),
+                    vol.Optional(
+                        CONF_MIN_THRESHOLD,
+                        default=DEFAULT_MIN_CONSUMPTION_GALLONS,
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=0.01,
+                            max=5.0,
+                            step=0.01,
+                            unit_of_measurement="gallons",
+                            mode=selector.NumberSelectorMode.BOX,
+                        ),
+                    ),
+                    vol.Optional(
+                        CONF_MAX_THRESHOLD,
+                        default=DEFAULT_MAX_CONSUMPTION_GALLONS,
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=1.0,
+                            max=100.0,
+                            step=1.0,
+                            unit_of_measurement="gallons",
+                            mode=selector.NumberSelectorMode.BOX,
+                        ),
+                    ),
                 },
             ),
             errors=_errors,
@@ -94,3 +132,119 @@ class SuperiorPlusPropaneFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             session=async_create_clientsession(self.hass),
         )
         await client.async_test_connection()
+
+    @staticmethod
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> config_entries.OptionsFlow:
+        """Get the options flow for this handler."""
+        return SuperiorPlusPropaneOptionsFlowHandler(config_entry)
+
+
+class SuperiorPlusPropaneOptionsFlowHandler(config_entries.OptionsFlow):
+    """Handle options flow for Superior Plus Propane."""
+
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        """Initialize options flow."""
+        self.config_entry = config_entry
+
+    async def async_step_init(
+        self,
+        user_input: dict | None = None,
+    ) -> config_entries.ConfigFlowResult:
+        """Manage the options."""
+        if user_input is not None:
+            # Validate threshold values
+            min_threshold = user_input.get(CONF_MIN_THRESHOLD)
+            max_threshold = user_input.get(CONF_MAX_THRESHOLD)
+            if min_threshold is not None and max_threshold is not None:
+                if min_threshold >= max_threshold:
+                    return self.async_show_form(
+                        step_id="init",
+                        data_schema=self._get_options_schema(),
+                        errors={"base": "invalid_thresholds"},
+                    )
+
+            # Update config entry with new options - these settings need a reload to take effect
+            data = dict(self.config_entry.data)
+            data.update(user_input)
+            self.hass.config_entries.async_update_entry(
+                self.config_entry, data=data
+            )
+            # Reload the config entry to apply new settings
+            await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+            return self.async_create_entry(title="", data={})
+
+        return self.async_show_form(
+            step_id="init",
+            data_schema=self._get_options_schema(),
+        )
+
+    def _get_options_schema(self) -> vol.Schema:
+        """Get the options schema with current values."""
+        current_interval = self.config_entry.data.get(
+            CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL
+        )
+        current_adaptive = self.config_entry.data.get(
+            CONF_ADAPTIVE_THRESHOLDS, True
+        )
+        current_min = self.config_entry.data.get(
+            CONF_MIN_THRESHOLD, DEFAULT_MIN_CONSUMPTION_GALLONS
+        )
+        current_max = self.config_entry.data.get(
+            CONF_MAX_THRESHOLD, DEFAULT_MAX_CONSUMPTION_GALLONS
+        )
+
+        return vol.Schema(
+                {
+                    vol.Optional(
+                        CONF_UPDATE_INTERVAL,
+                        default=current_interval,
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=300,  # Minimum 5 minutes
+                            max=86400,  # Maximum 24 hours
+                            step=300,  # 5 minute steps
+                            unit_of_measurement="seconds",
+                            mode=selector.NumberSelectorMode.BOX,
+                        ),
+                    ),
+                    vol.Optional(
+                        CONF_ADAPTIVE_THRESHOLDS,
+                        default=current_adaptive,
+                        description={"suggested_value": current_adaptive},
+                    ): selector.BooleanSelector(),
+                    vol.Optional(
+                        CONF_MIN_THRESHOLD,
+                        default=current_min,
+                        description={
+                            "suggested_value": current_min,
+                            "suffix": "Only used when adaptive thresholds are disabled",
+                        },
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=0.01,
+                            max=5.0,
+                            step=0.01,
+                            unit_of_measurement="gallons",
+                            mode=selector.NumberSelectorMode.BOX,
+                        ),
+                    ),
+                    vol.Optional(
+                        CONF_MAX_THRESHOLD,
+                        default=current_max,
+                        description={
+                            "suggested_value": current_max,
+                            "suffix": "Only used when adaptive thresholds are disabled",
+                        },
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=1.0,
+                            max=100.0,
+                            step=1.0,
+                            unit_of_measurement="gallons",
+                            mode=selector.NumberSelectorMode.BOX,
+                        ),
+                    ),
+                }
+            )

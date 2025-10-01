@@ -67,6 +67,8 @@ async def async_setup_entry(
                 # Consumption sensors for energy dashboard
                 SuperiorPlusPropaneConsumptionTotalSensor(coordinator, tank_data),
                 SuperiorPlusPropaneConsumptionRateSensor(coordinator, tank_data),
+                # Data quality sensor
+                SuperiorPlusPropaneDataQualitySensor(coordinator, tank_data),
             ]
         )
 
@@ -327,7 +329,10 @@ class SuperiorPlusPropaneConsumptionTotalSensor(
 
 
 class SuperiorPlusPropaneConsumptionRateSensor(SuperiorPlusPropaneEntity, SensorEntity):
-    """Consumption rate sensor."""
+    """Consumption rate sensor showing current hourly usage (informational only).
+
+    Note: This sensor is NOT used by the Energy Dashboard. The Energy Dashboard
+    calculates its own rates from the Total Consumption sensor."""
 
     def __init__(
         self,
@@ -351,3 +356,69 @@ class SuperiorPlusPropaneConsumptionRateSensor(SuperiorPlusPropaneEntity, Sensor
             return None
 
         return tank_data.get("consumption_rate", 0.0)
+
+
+class SuperiorPlusPropaneDataQualitySensor(SuperiorPlusPropaneEntity, SensorEntity):
+    """Data quality indicator sensor."""
+
+    def __init__(
+        self,
+        coordinator: SuperiorPlusPropaneDataUpdateCoordinator,
+        tank_data: dict[str, Any],
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, tank_data)
+        self._attr_unique_id = f"{DOMAIN}_{tank_data['tank_id']}_data_quality"
+        self._attr_name = f"{tank_data['address']} Data Quality"
+        self._attr_device_class = None
+        self._attr_state_class = None
+        self._attr_icon = "mdi:shield-check"
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the data quality status."""
+        tank_data = self._get_tank_data()
+        if not tank_data:
+            return None
+
+        quality = tank_data.get("data_quality", "unknown")
+        return quality
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return additional attributes."""
+        tank_data = self._get_tank_data()
+        if not tank_data:
+            return {}
+
+        attrs = {}
+        if tank_data.get("data_corrected"):
+            attrs["data_corrected"] = True
+            attrs["correction_reason"] = "Gallons value adjusted to match tank level percentage"
+        if tank_data.get("consumption_anomaly"):
+            attrs["consumption_anomaly"] = True
+            attrs["anomaly_reason"] = "Consumption exceeded expected threshold"
+        if tank_data.get("refill_detected"):
+            attrs["refill_detected"] = True
+            attrs["refill_reason"] = "Tank level increased since last reading"
+
+        return attrs
+
+    @property
+    def icon(self) -> str:
+        """Return dynamic icon based on quality."""
+        tank_data = self._get_tank_data()
+        if not tank_data:
+            return "mdi:shield-off"
+
+        quality = tank_data.get("data_quality", "unknown")
+        has_correction = tank_data.get("data_corrected", False)
+
+        if quality == "good" and not has_correction:
+            return "mdi:shield-check"
+        elif quality == "data_inconsistent" or has_correction:
+            return "mdi:shield-alert"
+        elif quality in ["invalid_level", "invalid_tank_size", "calculation_error"]:
+            return "mdi:shield-off"
+        else:
+            return "mdi:shield-outline"
