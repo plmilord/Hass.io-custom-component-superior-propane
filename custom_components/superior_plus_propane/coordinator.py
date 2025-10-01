@@ -29,7 +29,7 @@ from .const import (
     TANK_SIZE_MIN,
 )
 
-STORAGE_VERSION = 2  # Bumped for new data format
+STORAGE_VERSION = 1
 STORAGE_KEY = "superior_plus_propane_consumption"
 
 if TYPE_CHECKING:
