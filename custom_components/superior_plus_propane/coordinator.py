@@ -62,16 +62,24 @@ class SuperiorPlusPropaneDataUpdateCoordinator(DataUpdateCoordinator):
         self._consumption_totals: dict[str, float] = {}
         self._store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
         self._data_quality_flags: dict[str, str] = {}
-        self._use_dynamic_thresholds = config_entry.data.get("adaptive_thresholds", True)
-        self._min_threshold_override = config_entry.data.get("min_consumption_threshold")
-        self._max_threshold_override = config_entry.data.get("max_consumption_threshold")
+        self._use_dynamic_thresholds = config_entry.data.get(
+            "adaptive_thresholds", True
+        )
+        self._min_threshold_override = config_entry.data.get(
+            "min_consumption_threshold"
+        )
+        self._max_threshold_override = config_entry.data.get(
+            "max_consumption_threshold"
+        )
 
     async def async_load_consumption_data(self) -> None:
         """Load consumption data from storage with migration support."""
         stored_data = await self._store.async_load()
         if stored_data:
             # Check if migration is needed from v1 to v2
-            stored_version = stored_data.get("version", 1)  # v1 didn't have version field
+            stored_version = stored_data.get(
+                "version", 1
+            )  # v1 didn't have version field
 
             if stored_version == 1:
                 # Migrate from v1 to v2 format
@@ -100,27 +108,53 @@ class SuperiorPlusPropaneDataUpdateCoordinator(DataUpdateCoordinator):
     ) -> tuple[float, float]:
         """Calculate dynamic consumption thresholds based on tank size and update interval."""
         # Use overrides if BOTH are provided
-        if self._min_threshold_override is not None and self._max_threshold_override is not None:
+        if (
+            self._min_threshold_override is not None
+            and self._max_threshold_override is not None
+        ):
             return self._min_threshold_override, self._max_threshold_override
 
         # Use individual overrides with dynamic calculation for the other
-        if self._min_threshold_override is not None or self._max_threshold_override is not None:
+        if (
+            self._min_threshold_override is not None
+            or self._max_threshold_override is not None
+        ):
             if self._use_dynamic_thresholds:
                 # Calculate dynamic values
-                min_dynamic = tank_size * MIN_CONSUMPTION_PERCENTAGE * update_interval_hours
-                max_dynamic = tank_size * MAX_CONSUMPTION_PERCENTAGE * update_interval_hours
+                min_dynamic = (
+                    tank_size * MIN_CONSUMPTION_PERCENTAGE * update_interval_hours
+                )
+                max_dynamic = (
+                    tank_size * MAX_CONSUMPTION_PERCENTAGE * update_interval_hours
+                )
                 min_dynamic = max(ABSOLUTE_MIN_CONSUMPTION, min_dynamic)
                 max_dynamic = min(ABSOLUTE_MAX_CONSUMPTION, max_dynamic)
 
                 # Use override if provided, otherwise use dynamic
-                min_threshold = self._min_threshold_override if self._min_threshold_override is not None else min_dynamic
-                max_threshold = self._max_threshold_override if self._max_threshold_override is not None else max_dynamic
+                min_threshold = (
+                    self._min_threshold_override
+                    if self._min_threshold_override is not None
+                    else min_dynamic
+                )
+                max_threshold = (
+                    self._max_threshold_override
+                    if self._max_threshold_override is not None
+                    else max_dynamic
+                )
                 return min_threshold, max_threshold
             else:
                 # Use overrides with defaults for missing values
                 return (
-                    self._min_threshold_override if self._min_threshold_override is not None else DEFAULT_MIN_CONSUMPTION_GALLONS,
-                    self._max_threshold_override if self._max_threshold_override is not None else DEFAULT_MAX_CONSUMPTION_GALLONS
+                    (
+                        self._min_threshold_override
+                        if self._min_threshold_override is not None
+                        else DEFAULT_MIN_CONSUMPTION_GALLONS
+                    ),
+                    (
+                        self._max_threshold_override
+                        if self._max_threshold_override is not None
+                        else DEFAULT_MAX_CONSUMPTION_GALLONS
+                    ),
                 )
 
         if not self._use_dynamic_thresholds:
@@ -173,7 +207,9 @@ class SuperiorPlusPropaneDataUpdateCoordinator(DataUpdateCoordinator):
         # Validate consistency between level% and gallons
         try:
             current_gallons = float(tank.get("current_gallons", 0))
-            expected_gallons = (level * tank_size) / PERCENT_MULTIPLIER if tank_size > 0 else 0
+            expected_gallons = (
+                (level * tank_size) / PERCENT_MULTIPLIER if tank_size > 0 else 0
+            )
 
             if tank_size > 0 and expected_gallons > 0:
                 variance = abs(current_gallons - expected_gallons) / tank_size
@@ -194,7 +230,7 @@ class SuperiorPlusPropaneDataUpdateCoordinator(DataUpdateCoordinator):
                     tank["data_corrected"] = True
                 else:
                     self._data_quality_flags[tank_id] = "good"
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, ZeroDivisionError, ArithmeticError):
             self._data_quality_flags[tank_id] = "calculation_error"
             return False
 
@@ -228,7 +264,9 @@ class SuperiorPlusPropaneDataUpdateCoordinator(DataUpdateCoordinator):
             return
 
         # Calculate dynamic thresholds
-        update_interval_hours = max(0.001, self.update_interval.total_seconds() / SECONDS_PER_HOUR)  # Prevent division by zero
+        update_interval_hours = max(
+            0.001, self.update_interval.total_seconds() / SECONDS_PER_HOUR
+        )  # Prevent division by zero
         min_threshold, max_threshold = self._calculate_dynamic_thresholds(
             tank_size, update_interval_hours
         )
@@ -241,16 +279,24 @@ class SuperiorPlusPropaneDataUpdateCoordinator(DataUpdateCoordinator):
             # Handle tank refills (negative consumption)
             if consumption_gallons < 0:
                 # Tank was refilled - log but don't count as consumption
-                if tank_size > 0:
-                    LOGGER.info(
-                        "Tank %s was refilled: %.2f -> %.2f gallons (%.1f%% -> %.1f%%)",
-                        tank_id,
-                        previous_gallons,
-                        current_gallons,
-                        (previous_gallons / tank_size) * PERCENT_MULTIPLIER,
-                        (current_gallons / tank_size) * PERCENT_MULTIPLIER,
-                    )
-                else:
+                try:
+                    if tank_size > 0:
+                        LOGGER.info(
+                            "Tank %s was refilled: %.2f -> %.2f gallons (%.1f%% -> %.1f%%)",
+                            tank_id,
+                            previous_gallons,
+                            current_gallons,
+                            (previous_gallons / tank_size) * PERCENT_MULTIPLIER,
+                            (current_gallons / tank_size) * PERCENT_MULTIPLIER,
+                        )
+                    else:
+                        LOGGER.info(
+                            "Tank %s was refilled: %.2f -> %.2f gallons",
+                            tank_id,
+                            previous_gallons,
+                            current_gallons,
+                        )
+                except (ZeroDivisionError, ArithmeticError):
                     LOGGER.info(
                         "Tank %s was refilled: %.2f -> %.2f gallons",
                         tank_id,
@@ -315,9 +361,16 @@ class SuperiorPlusPropaneDataUpdateCoordinator(DataUpdateCoordinator):
             consumption_gallons = actual_previous - current_gallons
 
             if consumption_gallons > 0:
-                # Calculate hourly rate from last interval
-                consumption_ft3 = consumption_gallons * GALLONS_TO_CUBIC_FEET
-                tank["consumption_rate"] = round(consumption_ft3 / update_interval_hours, 4)
+                try:
+                    consumption_ft3 = consumption_gallons * GALLONS_TO_CUBIC_FEET
+                    tank["consumption_rate"] = round(
+                        consumption_ft3 / update_interval_hours, 4
+                    )
+                except (ZeroDivisionError, ArithmeticError):
+                    LOGGER.warning(
+                        "Error calculating consumption rate for tank %s", tank_id
+                    )
+                    tank["consumption_rate"] = 0.0
             else:
                 tank["consumption_rate"] = 0.0
         else:
@@ -350,22 +403,34 @@ class SuperiorPlusPropaneDataUpdateCoordinator(DataUpdateCoordinator):
 
             # Process each tank for consumption tracking
             for tank in tanks_data:
-                self._process_tank_consumption(tank)
+                try:
+                    self._process_tank_consumption(tank)
 
-                # Log data quality summary periodically
-                tank_id = tank.get("tank_id")
-                if tank_id and self._data_quality_flags.get(tank_id) != "good":
-                    LOGGER.info(
-                        "Tank %s data quality: %s",
-                        tank_id,
-                        self._data_quality_flags.get(tank_id, "unknown"),
+                    tank_id = tank.get("tank_id")
+                    if tank_id and self._data_quality_flags.get(tank_id) != "good":
+                        LOGGER.info(
+                            "Tank %s data quality: %s",
+                            tank_id,
+                            self._data_quality_flags.get(tank_id, "unknown"),
+                        )
+                except Exception as processing_error:
+                    LOGGER.error(
+                        "Error processing tank data: %s - Continuing with other tanks",
+                        processing_error,
+                        exc_info=True,
                     )
+                    # Continue processing other tanks
+
+            # Save consumption data to storage after successful processing
+            try:
+                await self.async_save_consumption_data()
+            except Exception as save_error:
+                # Log storage errors but don't fail the update
+                LOGGER.warning("Failed to save consumption data: %s", save_error)
+
+            return tanks_data
 
         except SuperiorPlusPropaneApiClientAuthenticationError as exception:
             raise ConfigEntryAuthFailed(exception) from exception
         except SuperiorPlusPropaneApiClientError as exception:
             raise UpdateFailed(exception) from exception
-        else:
-            # Save consumption data to storage after successful processing
-            await self.async_save_consumption_data()
-            return tanks_data
