@@ -119,9 +119,10 @@ class SuperiorPlusPropaneApiClient:
                         return
                     LOGGER.debug("Session invalid, need to re-authenticate")
                     self._authenticated = False
-            except (TimeoutError, Exception):
-                LOGGER.debug("Session validation failed, need to re-authenticate")
+            except (TimeoutError, Exception) as e:
+                LOGGER.debug("Session validation failed: %s - will re-authenticate", e)
                 self._authenticated = False
+                self._session.cookie_jar.clear()
 
         if not self._authenticated and not self._auth_in_progress:
             await self._authenticate()
@@ -134,6 +135,8 @@ class SuperiorPlusPropaneApiClient:
         self._auth_in_progress = True
         try:
             LOGGER.debug("Starting authentication sequence")
+
+            self._session.cookie_jar.clear()
 
             # Step 1: Get CSRF token from login page
             csrf_token = await self._get_csrf_token()
