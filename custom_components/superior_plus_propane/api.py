@@ -6,7 +6,8 @@ import re
 from typing import TYPE_CHECKING, Any
 
 import async_timeout
-from bs4 import BeautifulSoup, Tag
+from bs4 import BeautifulSoup
+from bs4.element import Tag
 from slugify import slugify
 
 from .const import (
