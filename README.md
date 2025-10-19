@@ -28,7 +28,7 @@ This integration brings all that tank monitoring data directly into your Home As
 ## Features
 
 - **Multi-Tank Support**: Automatically discovers and monitors all tanks on your Superior Propane account
-- **Real-Time Monitoring**: Track tank level %, current litres, capacity, reading dates, and delivery history
+- **Real-Time Monitoring**: Track tank level %, current volume, capacity, reading dates, and delivery history
 - **Energy Dashboard Integration**: Built-in consumption tracking with proper `state_class: total_increasing` for Home Assistant's Energy Dashboard
 - **Smart Analytics**: Monitor consumption rates, calculate days since last delivery, and track usage patterns
 - **Native HA Integration**: No external scripts, automations, or additional hardware required
@@ -39,19 +39,20 @@ This integration brings all that tank monitoring data directly into your Home As
 
 For each propane tank on your Superior Propane account, the integration provides:
 
-### Primary Metrics
-- **Tank Level** (%) - Current fill percentage from tank monitoring system
-- **Current Litres** - Exact litres currently in tank
-- **Tank Capacity** - Total tank size in litres
+### Key Indicators
+- **Level** (%) - Current tank fill percentage according to the monitoring system
+- **Current Volume** - Exact volume currently in the tank in your unit system
+- **Capacity** - Total tank size in your unit system
 
-### Delivery & Service Information
-- **Reading Date** - When the level was last measured by Superior
-- **Last Delivery** - Date of most recent propane delivery
-- **Days Since Delivery** - Automatically calculated days since last fill
+### Delivery and Maintenance Information
+- **Last SMART Tank Update** - Date of last level measurement by Superior Propane
+- **Last Delivery** - Date of last propane delivery
+- **Number of Days Since Delivery** - Automatically calculated number of days since last refill
 
 ### Energy Dashboard Integration
-- **Total Consumption** (litres) - Cumulative gas usage with `total_increasing` state class
-- **Consumption Rate** (litres/h) - Current usage rate for trend analysis
+- **Total Consumption** - Cumulative gas consumption with the "total_increasing" status class
+- **Consumption Rate** - Current consumption rate for trend analysis
+- **Average Price Paid** - Average price paid for propane deliveries from your account
 
 ## What you need
 
@@ -79,15 +80,18 @@ Copy the `custom_components/superior_propane` to your custom_components folder. 
 
 ### To do
 
-- [ ] 
-- [ ] 
+- [ ] Ability to configure this custom component via entries in the configuration.yaml file
+- [ ] Code cleanup
+- [ ] Validated proper operation when there is more than one tank in the customer account
+- [ ] Correctly work the "Number of Days Since Delivery" sensor
+- [ ] Add delivery switch when 'adds_delivery_date' is not declared
 
 ### Completed
 
-- [x] 
-- [x] 
-- [x] 
-- [x] 
+- [x] Added a sensor to represent the average price paid
+- [x] Home Assistant Brands (icons and logos)
+- [x] First publication
+- [x] Adapted the code to the Canadian site
 
 ## Inspiration / Credits
 

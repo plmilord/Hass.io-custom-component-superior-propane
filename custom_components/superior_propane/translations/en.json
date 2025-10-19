@@ -9,8 +9,8 @@
                     "password": "Password",
                     "update_interval": "Update Interval (seconds)",
                     "adaptive_thresholds": "Use Dynamic Consumption Thresholds",
-                    "min_consumption_threshold": "Minimum Consumption (gallons per reading)",
-                    "max_consumption_threshold": "Maximum Consumption (gallons per reading)"
+                    "min_consumption_threshold": "Minimum Consumption (liters per reading)",
+                    "max_consumption_threshold": "Maximum Consumption (liters per reading)"
                 },
                 "data_description": {
                     "adaptive_thresholds": "Automatically adjust consumption thresholds based on tank size. Recommended for most users.",
@@ -37,8 +37,8 @@
                 "data": {
                     "update_interval": "Update Interval (seconds)",
                     "adaptive_thresholds": "Use Dynamic Consumption Thresholds",
-                    "min_consumption_threshold": "Minimum Consumption (gallons per reading)",
-                    "max_consumption_threshold": "Maximum Consumption (gallons per reading)"
+                    "min_consumption_threshold": "Minimum Consumption (liters per reading)",
+                    "max_consumption_threshold": "Maximum Consumption (liters per reading)"
                 },
                 "data_description": {
                     "update_interval": "How often to check for new tank readings (minimum 5 minutes).",

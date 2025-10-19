@@ -14,7 +14,6 @@ from .data import SuperiorPropaneData
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
-
     from .data import SuperiorPropaneConfigEntry
 
 PLATFORMS: list[Platform] = [
@@ -22,16 +21,9 @@ PLATFORMS: list[Platform] = [
 ]
 
 
-# https://developers.home-assistant.io/docs/config_entries_index/#setting-up-an-entry
-async def async_setup_entry(
-    hass: HomeAssistant,
-    entry: SuperiorPropaneConfigEntry,
-) -> bool:
+async def async_setup_entry(hass: HomeAssistant, entry: SuperiorPropaneConfigEntry) -> bool:
     """Set up this integration using UI."""
-    coordinator = SuperiorPropaneDataUpdateCoordinator(
-        hass=hass,
-        config_entry=entry,
-    )
+    coordinator = SuperiorPropaneDataUpdateCoordinator(hass=hass, config_entry=entry)
 
     entry.runtime_data = SuperiorPropaneData(
         client=SuperiorPropaneApiClient(
@@ -46,7 +38,7 @@ async def async_setup_entry(
     # Load stored consumption data before first refresh
     await coordinator.async_load_consumption_data()
 
-    # https://developers.home-assistant.io/docs/integration_fetching_data#coordinated-single-api-poll-for-data-for-all-entities
+    # Perform first refresh to populate coordinator.data
     await coordinator.async_config_entry_first_refresh()
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -55,10 +47,7 @@ async def async_setup_entry(
     return True
 
 
-async def async_unload_entry(
-    hass: HomeAssistant,
-    entry: SuperiorPropaneConfigEntry,
-) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: SuperiorPropaneConfigEntry) -> bool:
     """Handle removal of an entry."""
     # Close the dedicated session to clean up resources
     if entry.runtime_data and entry.runtime_data.client:
@@ -69,9 +58,6 @@ async def async_unload_entry(
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 
-async def async_reload_entry(
-    hass: HomeAssistant,
-    entry: SuperiorPropaneConfigEntry,
-) -> None:
+async def async_reload_entry(hass: HomeAssistant, entry: SuperiorPropaneConfigEntry) -> None:
     """Reload config entry."""
     await hass.config_entries.async_reload(entry.entry_id)

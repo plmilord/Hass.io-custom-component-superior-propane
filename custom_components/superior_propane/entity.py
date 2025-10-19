@@ -11,18 +11,12 @@ from .const import ATTRIBUTION, DOMAIN
 from .coordinator import SuperiorPropaneDataUpdateCoordinator
 
 
-class SuperiorPropaneEntity(
-    CoordinatorEntity[SuperiorPropaneDataUpdateCoordinator]
-):
+class SuperiorPropaneEntity(CoordinatorEntity[SuperiorPropaneDataUpdateCoordinator]):
     """SuperiorPropaneEntity class."""
 
     _attr_attribution = ATTRIBUTION
 
-    def __init__(
-        self,
-        coordinator: SuperiorPropaneDataUpdateCoordinator,
-        tank_data: dict[str, Any],
-    ) -> None:
+    def __init__(self, coordinator: SuperiorPropaneDataUpdateCoordinator, tank_data: dict[str, Any]) -> None:
         """Initialize."""
         super().__init__(coordinator)
         self._tank_id = tank_data["tank_id"]

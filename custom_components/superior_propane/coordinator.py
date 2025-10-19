@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -17,9 +18,9 @@ from .const import (
     ABSOLUTE_MAX_CONSUMPTION,
     ABSOLUTE_MIN_CONSUMPTION,
     DATA_VALIDATION_TOLERANCE,
-    DEFAULT_MAX_CONSUMPTION_GALLONS,
-    DEFAULT_MIN_CONSUMPTION_GALLONS,
-    GALLONS_TO_CUBIC_FEET,
+    DEFAULT_MAX_CONSUMPTION_LITERS,
+    DEFAULT_MIN_CONSUMPTION_LITERS,
+    LITERS_TO_CUBIC_METERS,
     LOGGER,
     MAX_CONSUMPTION_PERCENTAGE,
     MIN_CONSUMPTION_PERCENTAGE,
@@ -43,11 +44,7 @@ class SuperiorPropaneDataUpdateCoordinator(DataUpdateCoordinator):
 
     config_entry: SuperiorPropaneConfigEntry
 
-    def __init__(
-        self,
-        hass: HomeAssistant,
-        config_entry: SuperiorPropaneConfigEntry,
-    ) -> None:
+    def __init__(self, hass: HomeAssistant, config_entry: SuperiorPropaneConfigEntry) -> None:
         """Initialize the coordinator."""
         super().__init__(
             hass,
@@ -57,29 +54,22 @@ class SuperiorPropaneDataUpdateCoordinator(DataUpdateCoordinator):
                 seconds=config_entry.data.get("update_interval", 3600)
             ),
         )
+        self.account_data: dict[str, Any] = {}
         self.config_entry = config_entry
         self._previous_readings: dict[str, float] = {}
         self._consumption_totals: dict[str, float] = {}
         self._store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
         self._data_quality_flags: dict[str, str] = {}
-        self._use_dynamic_thresholds = config_entry.data.get(
-            "adaptive_thresholds", True
-        )
-        self._min_threshold_override = config_entry.data.get(
-            "min_consumption_threshold"
-        )
-        self._max_threshold_override = config_entry.data.get(
-            "max_consumption_threshold"
-        )
+        self._use_dynamic_thresholds = config_entry.data.get("adaptive_thresholds", True)
+        self._min_threshold_override = config_entry.data.get("min_consumption_threshold")
+        self._max_threshold_override = config_entry.data.get("max_consumption_threshold")
 
     async def async_load_consumption_data(self) -> None:
         """Load consumption data from storage with migration support."""
         stored_data = await self._store.async_load()
         if stored_data:
             # Check if migration is needed from v1 to v2
-            stored_version = stored_data.get(
-                "version", 1
-            )  # v1 didn't have version field
+            stored_version = stored_data.get("version", 1)  # v1 didn't have version field
 
             if stored_version == 1:
                 # Migrate from v1 to v2 format
@@ -103,30 +93,18 @@ class SuperiorPropaneDataUpdateCoordinator(DataUpdateCoordinator):
         await self._store.async_save(data)
         LOGGER.debug("Saved consumption data: %s", self._consumption_totals)
 
-    def _calculate_dynamic_thresholds(
-        self, tank_size: float, update_interval_hours: float
-    ) -> tuple[float, float]:
+    def _calculate_dynamic_thresholds(self, tank_size: float, update_interval_hours: float) -> tuple[float, float]:
         """Calculate dynamic consumption thresholds based on tank size and update interval."""
         # Use overrides if BOTH are provided
-        if (
-            self._min_threshold_override is not None
-            and self._max_threshold_override is not None
-        ):
+        if (self._min_threshold_override is not None and self._max_threshold_override is not None):
             return self._min_threshold_override, self._max_threshold_override
 
         # Use individual overrides with dynamic calculation for the other
-        if (
-            self._min_threshold_override is not None
-            or self._max_threshold_override is not None
-        ):
+        if (self._min_threshold_override is not None or self._max_threshold_override is not None):
             if self._use_dynamic_thresholds:
                 # Calculate dynamic values
-                min_dynamic = (
-                    tank_size * MIN_CONSUMPTION_PERCENTAGE * update_interval_hours
-                )
-                max_dynamic = (
-                    tank_size * MAX_CONSUMPTION_PERCENTAGE * update_interval_hours
-                )
+                min_dynamic = (tank_size * MIN_CONSUMPTION_PERCENTAGE * update_interval_hours)
+                max_dynamic = (tank_size * MAX_CONSUMPTION_PERCENTAGE * update_interval_hours)
                 min_dynamic = max(ABSOLUTE_MIN_CONSUMPTION, min_dynamic)
                 max_dynamic = min(ABSOLUTE_MAX_CONSUMPTION, max_dynamic)
 
@@ -148,17 +126,17 @@ class SuperiorPropaneDataUpdateCoordinator(DataUpdateCoordinator):
                     (
                         self._min_threshold_override
                         if self._min_threshold_override is not None
-                        else DEFAULT_MIN_CONSUMPTION_GALLONS
+                        else DEFAULT_MIN_CONSUMPTION_LITERS
                     ),
                     (
                         self._max_threshold_override
                         if self._max_threshold_override is not None
-                        else DEFAULT_MAX_CONSUMPTION_GALLONS
+                        else DEFAULT_MAX_CONSUMPTION_LITERS
                     ),
                 )
 
         if not self._use_dynamic_thresholds:
-            return DEFAULT_MIN_CONSUMPTION_GALLONS, DEFAULT_MAX_CONSUMPTION_GALLONS
+            return DEFAULT_MIN_CONSUMPTION_LITERS, DEFAULT_MAX_CONSUMPTION_LITERS
 
         # Dynamic calculation based on tank size
         min_consumption = tank_size * MIN_CONSUMPTION_PERCENTAGE * update_interval_hours
@@ -172,17 +150,13 @@ class SuperiorPropaneDataUpdateCoordinator(DataUpdateCoordinator):
 
     def _validate_tank_data(self, tank: dict[str, Any]) -> bool:
         """Validate tank data consistency and set quality flags."""
-        tank_id = tank.get("tank_id", "unknown")
+        tank_id = tank.get("tank_id", "Unknown")
 
         # Validate tank size
         try:
             tank_size = float(tank.get("tank_size", 0))
             if not (TANK_SIZE_MIN <= tank_size <= TANK_SIZE_MAX):
-                LOGGER.warning(
-                    "Tank %s has unrealistic size: %s gallons",
-                    tank_id,
-                    tank_size,
-                )
+                LOGGER.warning("Tank %s has unrealistic size: %s liters", tank_id, tank_size)
                 self._data_quality_flags[tank_id] = "invalid_tank_size"
                 return False
         except (ValueError, TypeError):
@@ -193,43 +167,37 @@ class SuperiorPropaneDataUpdateCoordinator(DataUpdateCoordinator):
         try:
             level = float(tank.get("level", -1))
             if not (0 <= level <= 100):
-                LOGGER.warning(
-                    "Tank %s has invalid level: %s%%",
-                    tank_id,
-                    level,
-                )
+                LOGGER.warning("Tank %s has invalid level: %s%%", tank_id, level)
                 self._data_quality_flags[tank_id] = "invalid_level"
                 return False
         except (ValueError, TypeError):
             self._data_quality_flags[tank_id] = "invalid_level"
             return False
 
-        # Validate consistency between level% and gallons
+        # Validate consistency between level% and liters
         try:
-            current_gallons = float(tank.get("current_gallons", 0))
-            expected_gallons = (
-                (level * tank_size) / PERCENT_MULTIPLIER if tank_size > 0 else 0
-            )
+            current_volume = float(tank.get("current_volume", 0))
+            expected_liters = ((level * tank_size) / PERCENT_MULTIPLIER if tank_size > 0 else 0)
 
-            if tank_size > 0 and expected_gallons > 0:
-                variance = abs(current_gallons - expected_gallons) / tank_size
+            if tank_size > 0 and expected_liters > 0:
+                variance = abs(current_volume - expected_liters) / tank_size
                 if variance > DATA_VALIDATION_TOLERANCE:
                     LOGGER.warning(
-                        "Tank %s data inconsistency: Level %s%% suggests %.1f gallons, "
-                        "but scraped value is %.1f gallons (tank size: %.0f, variance: %.1f%%)",
+                        "Tank %s data inconsistency: Level %s%% suggests %.1f liters, "
+                        "but scraped value is %.1f liters (tank size: %.0f, variance: %.1f%%)",
                         tank_id,
                         level,
-                        expected_gallons,
-                        current_gallons,
+                        expected_liters,
+                        current_volume,
                         tank_size,
                         variance * 100,
                     )
                     self._data_quality_flags[tank_id] = "data_inconsistent"
                     # Use calculated value as it's more reliable
-                    tank["current_gallons"] = str(expected_gallons)
+                    tank["current_volume"] = str(expected_liters)
                     tank["data_corrected"] = True
                 else:
-                    self._data_quality_flags[tank_id] = "good"
+                    self._data_quality_flags[tank_id] = "Good"
         except (ValueError, TypeError, ZeroDivisionError, ArithmeticError):
             self._data_quality_flags[tank_id] = "calculation_error"
             return False
@@ -248,14 +216,14 @@ class SuperiorPropaneDataUpdateCoordinator(DataUpdateCoordinator):
             LOGGER.debug("Tank %s data validation failed", tank_id)
             tank["consumption_total"] = self._consumption_totals.get(tank_id, 0.0)
             tank["consumption_rate"] = 0.0
-            tank["data_quality"] = self._data_quality_flags.get(tank_id, "unknown")
+            tank["data_quality"] = self._data_quality_flags.get(tank_id, "Unknown")
             return
 
-        current_gallons_str = tank.get("current_gallons", "0")
+        current_volume_str = tank.get("current_volume", "0")
 
-        # Convert to float, handle "unknown" values
+        # Convert to float, handle "Unknown" values
         try:
-            current_gallons = float(current_gallons_str)
+            current_volume = float(current_volume_str)
             tank_size = float(tank.get("tank_size", 500))  # Default to 500 if missing
         except (ValueError, TypeError):
             tank["consumption_total"] = self._consumption_totals.get(tank_id, 0.0)
@@ -264,84 +232,80 @@ class SuperiorPropaneDataUpdateCoordinator(DataUpdateCoordinator):
             return
 
         # Calculate dynamic thresholds
-        update_interval_hours = max(
-            0.001, self.update_interval.total_seconds() / SECONDS_PER_HOUR
-        )  # Prevent division by zero
-        min_threshold, max_threshold = self._calculate_dynamic_thresholds(
-            tank_size, update_interval_hours
-        )
+        update_interval_hours = max(0.001, self.update_interval.total_seconds() / SECONDS_PER_HOUR)  # Prevent division by zero
+        min_threshold, max_threshold = self._calculate_dynamic_thresholds(tank_size, update_interval_hours)
 
         # Calculate consumption if we have a previous reading
         if tank_id in self._previous_readings:
-            previous_gallons = self._previous_readings[tank_id]
-            consumption_gallons = previous_gallons - current_gallons
+            previous_liters = self._previous_readings[tank_id]
+            consumption_liters = previous_liters - current_volume
 
             # Handle tank refills (negative consumption)
-            if consumption_gallons < 0:
+            if consumption_liters < 0:
                 # Tank was refilled - log but don't count as consumption
                 try:
                     if tank_size > 0:
                         LOGGER.info(
-                            "Tank %s was refilled: %.2f -> %.2f gallons (%.1f%% -> %.1f%%)",
+                            "Tank %s was refilled: %.2f -> %.2f liters (%.1f%% -> %.1f%%)",
                             tank_id,
-                            previous_gallons,
-                            current_gallons,
-                            (previous_gallons / tank_size) * PERCENT_MULTIPLIER,
-                            (current_gallons / tank_size) * PERCENT_MULTIPLIER,
+                            previous_liters,
+                            current_volume,
+                            (previous_liters / tank_size) * PERCENT_MULTIPLIER,
+                            (current_volume / tank_size) * PERCENT_MULTIPLIER,
                         )
                     else:
                         LOGGER.info(
-                            "Tank %s was refilled: %.2f -> %.2f gallons",
+                            "Tank %s was refilled: %.2f -> %.2f liters",
                             tank_id,
-                            previous_gallons,
-                            current_gallons,
+                            previous_liters,
+                            current_volume,
                         )
                 except (ZeroDivisionError, ArithmeticError):
                     LOGGER.info(
-                        "Tank %s was refilled: %.2f -> %.2f gallons",
+                        "Tank %s was refilled: %.2f -> %.2f liters",
                         tank_id,
-                        previous_gallons,
-                        current_gallons,
+                        previous_liters,
+                        current_volume,
                     )
                 tank["refill_detected"] = True
             # Check against dynamic thresholds
-            elif consumption_gallons > 0:
-                # Convert gallons to cubic feet and add to total
-                consumption_ft3 = consumption_gallons * GALLONS_TO_CUBIC_FEET
+            elif consumption_liters > 0:
+                # Convert liters to cubic meters and add to total
+                consumption_m3 = consumption_liters * LITERS_TO_CUBIC_METERS
 
                 if tank_id not in self._consumption_totals:
                     self._consumption_totals[tank_id] = 0.0
 
                 # Log based on threshold validation
-                if consumption_gallons < min_threshold:
+                if consumption_liters < min_threshold:
                     LOGGER.info(
-                        "Tank %s low consumption: %.3f gallons (%.4f ft³) [below threshold: %.3f]",
+                        "Tank %s low consumption: %.3f liters (%.4f m³) [below threshold: %.3f]",
                         tank_id,
-                        consumption_gallons,
-                        consumption_ft3,
+                        consumption_liters,
+                        consumption_m3,
                         min_threshold,
                     )
                     # Still record it for accuracy
-                    self._consumption_totals[tank_id] += consumption_ft3
-                elif consumption_gallons > max_threshold:
+                    self._consumption_totals[tank_id] += consumption_m3
+                elif consumption_liters > max_threshold:
                     LOGGER.warning(
-                        "Tank %s high consumption: %.2f gallons (%.3f ft³) [above threshold: %.2f] - recording with anomaly flag",
+                        "Tank %s high consumption: %.2f liters (%.3f m³) [above threshold: %.2f] - recording with anomaly flag",
                         tank_id,
-                        consumption_gallons,
-                        consumption_ft3,
+                        consumption_liters,
+                        consumption_m3,
                         max_threshold,
                     )
                     # Record but flag as anomaly
-                    self._consumption_totals[tank_id] += consumption_ft3
+                    self._consumption_totals[tank_id] += consumption_m3
                     tank["consumption_anomaly"] = True
                 else:
                     # Normal consumption
-                    self._consumption_totals[tank_id] += consumption_ft3
+                    self._consumption_totals[tank_id] += consumption_m3
                     LOGGER.debug(
-                        "Tank %s consumed %.2f gallons (%.3f ft³). Total: %.3f ft³",
+                        "Tank %s consumed %.2f liters (%.3f m³). Total: %.3f m³",
                         tank_id,
-                        consumption_gallons,
-                        consumption_ft3,
+                        consumption_liters,
+                        consumption_m3,
                         self._consumption_totals[tank_id],
                     )
 
@@ -349,7 +313,7 @@ class SuperiorPropaneDataUpdateCoordinator(DataUpdateCoordinator):
         actual_previous = self._previous_readings.get(tank_id)
 
         # Update previous reading
-        self._previous_readings[tank_id] = current_gallons
+        self._previous_readings[tank_id] = current_volume
 
         # Add consumption total to tank data for Energy Dashboard
         # This is the TOTAL_INCREASING value that Home Assistant uses
@@ -358,18 +322,14 @@ class SuperiorPropaneDataUpdateCoordinator(DataUpdateCoordinator):
         # Calculate instantaneous consumption rate based on last reading interval
         # This is for informational purposes only - Energy Dashboard doesn't use this
         if actual_previous is not None and update_interval_hours > 0:
-            consumption_gallons = actual_previous - current_gallons
+            consumption_liters = actual_previous - current_volume
 
-            if consumption_gallons > 0:
+            if consumption_liters > 0:
                 try:
-                    consumption_ft3 = consumption_gallons * GALLONS_TO_CUBIC_FEET
-                    tank["consumption_rate"] = round(
-                        consumption_ft3 / update_interval_hours, 4
-                    )
+                    consumption_m3 = consumption_liters * LITERS_TO_CUBIC_METERS
+                    tank["consumption_rate"] = round(consumption_m3 / update_interval_hours, 4)
                 except (ZeroDivisionError, ArithmeticError):
-                    LOGGER.warning(
-                        "Error calculating consumption rate for tank %s", tank_id
-                    )
+                    LOGGER.warning("Error calculating consumption rate for tank %s", tank_id)
                     tank["consumption_rate"] = 0.0
             else:
                 tank["consumption_rate"] = 0.0
@@ -377,56 +337,50 @@ class SuperiorPropaneDataUpdateCoordinator(DataUpdateCoordinator):
             tank["consumption_rate"] = 0.0
 
         # Add data quality indicator
-        tank["data_quality"] = self._data_quality_flags.get(tank_id, "unknown")
+        tank["data_quality"] = self._data_quality_flags.get(tank_id, "Unknown")
 
         # Calculate days since last delivery
-        last_delivery = tank.get("last_delivery", "unknown")
-        if last_delivery != "unknown":
+        last_delivery = tank.get("last_delivery", "Unknown")
+        if last_delivery != "Unknown":
             try:
-                delivery_date = datetime.strptime(last_delivery, "%m/%d/%Y").replace(
-                    tzinfo=UTC
-                )
+                delivery_date = datetime.strptime(last_delivery, "%m/%d/%Y").replace(tzinfo=UTC)
                 current_date = datetime.now(UTC)
                 days_since = (current_date - delivery_date).days
                 tank["days_since_delivery"] = days_since
             except (ValueError, TypeError):
-                tank["days_since_delivery"] = "unknown"
+                tank["days_since_delivery"] = "Unknown"
         else:
-            tank["days_since_delivery"] = "unknown"
+            tank["days_since_delivery"] = "Unknown"
 
     async def _async_update_data(self) -> list[dict[str, Any]]:
         """Update data via library."""
         try:
-            tanks_data = (
-                await self.config_entry.runtime_data.client.async_get_tanks_data()
-            )
+            tanks_data = await self.config_entry.runtime_data.client.async_get_tanks_data()
+            LOGGER.debug("Raw tank data from API: %s", json.dumps(tanks_data, indent=2))
 
             # Process each tank for consumption tracking
             for tank in tanks_data:
                 try:
                     self._process_tank_consumption(tank)
-
                     tank_id = tank.get("tank_id")
-                    if tank_id and self._data_quality_flags.get(tank_id) != "good":
-                        LOGGER.info(
-                            "Tank %s data quality: %s",
-                            tank_id,
-                            self._data_quality_flags.get(tank_id, "unknown"),
-                        )
+                    if tank_id and self._data_quality_flags.get(tank_id) != "Good":
+                        LOGGER.info("Tank %s data quality: %s", tank_id, self._data_quality_flags.get(tank_id, "Unknown"))
                 except Exception as processing_error:
-                    LOGGER.error(
-                        "Error processing tank data: %s - Continuing with other tanks",
-                        processing_error,
-                        exc_info=True,
-                    )
-                    # Continue processing other tanks
+                    LOGGER.error("Error processing tank data: %s - Continuing with other tanks", processing_error, exc_info=True)
 
-            # Save consumption data to storage after successful processing
-            try:
-                await self.async_save_consumption_data()
-            except Exception as save_error:
-                # Log storage errors but don't fail the update
-                LOGGER.warning("Failed to save consumption data: %s", save_error)
+            # Fetch and compute orders totals (account-wide)
+            orders_totals = await self.config_entry.runtime_data.client.async_get_orders_totals()
+            total_litres = orders_totals.get("total_litres", 0.0)
+            total_cost = orders_totals.get("total_cost", 0.0)
+            average_price = total_cost / total_litres if total_litres > 0 else 0.0
+            self.account_data = {
+                "total_litres": total_litres,
+                "total_cost": total_cost,
+                "average_price": average_price,
+            }
+
+            # Save consumption data...
+            await self.async_save_consumption_data()
 
             return tanks_data
 

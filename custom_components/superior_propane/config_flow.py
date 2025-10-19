@@ -20,8 +20,8 @@ from .const import (
     CONF_MAX_THRESHOLD,
     CONF_MIN_THRESHOLD,
     CONF_UPDATE_INTERVAL,
-    DEFAULT_MAX_CONSUMPTION_GALLONS,
-    DEFAULT_MIN_CONSUMPTION_GALLONS,
+    DEFAULT_MAX_CONSUMPTION_LITERS,
+    DEFAULT_MIN_CONSUMPTION_LITERS,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
     LOGGER,
@@ -33,10 +33,7 @@ class SuperiorPropaneFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
-    async def async_step_user(
-        self,
-        user_input: dict | None = None,
-    ) -> config_entries.ConfigFlowResult:
+    async def async_step_user(self, user_input: dict | None = None) -> config_entries.ConfigFlowResult:
         """Handle a flow initialized by the user."""
         _errors = {}
         if user_input is not None:
@@ -97,25 +94,25 @@ class SuperiorPropaneFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                     ): selector.BooleanSelector(),
                     vol.Optional(
                         CONF_MIN_THRESHOLD,
-                        default=DEFAULT_MIN_CONSUMPTION_GALLONS,
+                        default=DEFAULT_MIN_CONSUMPTION_LITERS,
                     ): selector.NumberSelector(
                         selector.NumberSelectorConfig(
                             min=0.01,
                             max=5.0,
                             step=0.01,
-                            unit_of_measurement="gallons",
+                            unit_of_measurement="liters",
                             mode=selector.NumberSelectorMode.BOX,
                         ),
                     ),
                     vol.Optional(
                         CONF_MAX_THRESHOLD,
-                        default=DEFAULT_MAX_CONSUMPTION_GALLONS,
+                        default=DEFAULT_MAX_CONSUMPTION_LITERS,
                     ): selector.NumberSelector(
                         selector.NumberSelectorConfig(
                             min=1.0,
                             max=100.0,
                             step=1.0,
-                            unit_of_measurement="gallons",
+                            unit_of_measurement="liters",
                             mode=selector.NumberSelectorMode.BOX,
                         ),
                     ),
@@ -124,9 +121,7 @@ class SuperiorPropaneFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
             errors=_errors,
         )
 
-    async def async_step_reauth(
-        self, user_input: dict | None = None
-    ) -> config_entries.ConfigFlowResult:
+    async def async_step_reauth(self, user_input: dict | None = None) -> config_entries.ConfigFlowResult:
         """Handle re-authentication flow."""
         if user_input is None:
             return self.async_show_form(
@@ -213,7 +208,7 @@ class SuperiorPropaneFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                         ),
                     }
                 ),
-                errors={"base": "unknown"},
+                errors={"base": "Unknown"},
             )
 
         # Update the config entry with new credentials
@@ -247,14 +242,7 @@ class SuperiorPropaneFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 class SuperiorPropaneOptionsFlowHandler(config_entries.OptionsFlow):
     """Handle options flow for Superior Propane."""
 
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Initialize options flow."""
-        self.config_entry = config_entry
-
-    async def async_step_init(
-        self,
-        user_input: dict | None = None,
-    ) -> config_entries.ConfigFlowResult:
+    async def async_step_init(self, user_input: dict | None = None) -> config_entries.ConfigFlowResult:
         """Manage the options."""
         if user_input is not None:
             min_threshold = user_input.get(CONF_MIN_THRESHOLD)
@@ -289,10 +277,10 @@ class SuperiorPropaneOptionsFlowHandler(config_entries.OptionsFlow):
             CONF_ADAPTIVE_THRESHOLDS, True
         )
         current_min = self.config_entry.data.get(
-            CONF_MIN_THRESHOLD, DEFAULT_MIN_CONSUMPTION_GALLONS
+            CONF_MIN_THRESHOLD, DEFAULT_MIN_CONSUMPTION_LITERS
         )
         current_max = self.config_entry.data.get(
-            CONF_MAX_THRESHOLD, DEFAULT_MAX_CONSUMPTION_GALLONS
+            CONF_MAX_THRESHOLD, DEFAULT_MAX_CONSUMPTION_LITERS
         )
 
         return vol.Schema(
@@ -326,7 +314,7 @@ class SuperiorPropaneOptionsFlowHandler(config_entries.OptionsFlow):
                         min=0.01,
                         max=5.0,
                         step=0.01,
-                        unit_of_measurement="gallons",
+                        unit_of_measurement="liters",
                         mode=selector.NumberSelectorMode.BOX,
                     ),
                 ),
@@ -342,7 +330,7 @@ class SuperiorPropaneOptionsFlowHandler(config_entries.OptionsFlow):
                         min=1.0,
                         max=100.0,
                         step=1.0,
-                        unit_of_measurement="gallons",
+                        unit_of_measurement="liters",
                         mode=selector.NumberSelectorMode.BOX,
                     ),
                 ),
