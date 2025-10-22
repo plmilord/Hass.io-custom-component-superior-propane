@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 import json
 from typing import TYPE_CHECKING, Any
 import asyncio
@@ -10,8 +9,6 @@ from datetime import datetime
 
 import async_timeout
 from bs4 import BeautifulSoup
-from bs4.element import Tag
-from slugify import slugify
 
 from .const import (
     HOME_URL,
@@ -347,17 +344,18 @@ class SuperiorPropaneApiClient:
             last_reading = tank.get("adds_last_reading", "Unknown")
             level = tank.get("adds_fill_percentage", "Unknown")
             tank_id = tank.get("adds_tank_id", "Unknown")
+            tank_name = tank.get("tank_name", "Unknown")
+            tank_serial_number = tank.get("adds_serial_number", "Unknown").strip()
             tank_size = tank.get("adds_tank_size", "Unknown")
-            total_consumption = tank.get("adds_tank_usage", "Unknown")
             # Calculate days since delivery
-            try:
-                last_delivery_date = datetime.strptime(last_delivery, "%Y-%m-%d")
-                last_reading_obj = datetime.strptime(last_reading.split(" ")[0], "%Y-%m-%d")
-                days_since_delivery = (last_reading_obj - last_delivery_date).days
-                days_since_delivery = str(days_since_delivery) if days_since_delivery >= 0 else "Unknown"
-            except (ValueError, TypeError):
-                LOGGER.warning("Failed to calculate days since delivery for tank %s", tank_id)
-                days_since_delivery = "Unknown"
+            #try:
+                #last_delivery_date = datetime.strptime(last_delivery, "%Y-%m-%d")
+                #last_reading_obj = datetime.strptime(last_reading.split(" ")[0], "%Y-%m-%d")
+                #days_since_delivery = (last_reading_obj - last_delivery_date).days
+                #days_since_delivery = str(days_since_delivery) if days_since_delivery >= 0 else "Unknown"
+            #except (ValueError, TypeError):
+                #LOGGER.warning("Failed to calculate days since delivery for tank %s", tank_id)
+                #days_since_delivery = "Unknown"
         except (AttributeError, ValueError, TypeError) as exception:
             LOGGER.warning("Error parsing tank JSON %d: %s", tank_number, exception)
             return None
@@ -365,14 +363,15 @@ class SuperiorPropaneApiClient:
             "address": address,
             "current_volume": current_volume,
             "customer_number": customer_number,
-            "days_since_delivery": days_since_delivery,
+            #"days_since_delivery": days_since_delivery,
             "last_delivery": last_delivery,
             "last_reading": last_reading,
             "level": level,
             "tank_id": tank_id,
+            "tank_name": tank_name,
             "tank_number": tank_number,
+            "tank_serial_number": tank_serial_number,
             "tank_size": tank_size,
-            "total_consumption": total_consumption,
         }
 
     async def async_test_connection(self) -> bool:

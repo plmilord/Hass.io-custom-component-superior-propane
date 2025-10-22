@@ -15,9 +15,7 @@ from homeassistant.const import (
     UnitOfVolume,
 )
 
-from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import CURRENCY_PER_LITER, DOMAIN, LOGGER
 from .entity import SuperiorPropaneEntity
@@ -55,7 +53,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: SuperiorPropaneConfigEnt
                 # Primary tank sensors
                 SuperiorPropaneLevelSensor(coordinator, tank_data),
                 SuperiorPropaneVolumeSensor(coordinator, tank_data),
-                SuperiorPropaneCapacitySensor(coordinator, tank_data),
                 # Information sensors
                 SuperiorPropaneLastSmartTankUpdateSensor(coordinator, tank_data),
                 SuperiorPropaneLastDeliverySensor(coordinator, tank_data),
@@ -68,13 +65,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: SuperiorPropaneConfigEnt
                 SuperiorPropaneDataQualitySensor(coordinator, tank_data),
             ]
         )
-
-    ## Add account-wide sensor for average price
-    #customer_number = coordinator.data[0].get("customer_number") if coordinator.data else None
-    #if customer_number:
-        #entities.append(SuperiorPropaneAveragePriceSensor(coordinator, customer_number))
-    #else:
-        #LOGGER.warning("No customer_number found in coordinator.data for account-wide sensor")
 
     async_add_entities(entities)
 
@@ -135,36 +125,6 @@ class SuperiorPropaneVolumeSensor(SuperiorPropaneEntity, SensorEntity):
 
         try:
             return float(volume_str)
-        except (ValueError, TypeError):
-            return None
-
-
-class SuperiorPropaneCapacitySensor(SuperiorPropaneEntity, SensorEntity):
-    """Tank capacity sensor."""
-
-    def __init__(self, coordinator: SuperiorPropaneDataUpdateCoordinator, tank_data: dict[str, Any]) -> None:
-        """Initialize the sensor."""
-        super().__init__(coordinator, tank_data)
-        self._attr_unique_id = f"{DOMAIN}_{tank_data['customer_number']}_{tank_data['tank_id']}_tank_size"
-        self._attr_name = "Capacity"
-        self._attr_native_unit_of_measurement = UnitOfVolume.LITERS
-        self._attr_device_class = SensorDeviceClass.VOLUME
-        self._attr_state_class = None
-        self._attr_icon = "mdi:propane-tank-outline"
-
-    @property
-    def native_value(self) -> float | None:
-        """Return the tank capacity."""
-        tank_data = self._get_tank_data()
-        if not tank_data:
-            return None
-
-        capacity_str = tank_data.get("tank_size", "Unknown")
-        if capacity_str == "Unknown":
-            return None
-
-        try:
-            return float(capacity_str)
         except (ValueError, TypeError):
             return None
 

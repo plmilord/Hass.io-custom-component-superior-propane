@@ -82,12 +82,13 @@ Copy the `custom_components/superior_propane` to your custom_components folder. 
 
 - [ ] Ability to configure this custom component via entries in the configuration.yaml file
 - [ ] Code cleanup
+- [ ] Review authentication to the Superior Propane website and adjust refresh rates based on reading frequency
 - [ ] Validated proper operation when there is more than one tank in the customer account
-- [ ] Correctly work the "Number of Days Since Delivery" sensor
 - [ ] Add delivery switch when 'adds_delivery_date' is not declared
 
 ### Completed
 
+- [x] Checking the consistency of the code, especially coordinator.py (among other things, so that variables are populated correctly)
 - [x] Added a sensor to represent the average price paid
 - [x] Home Assistant Brands (icons and logos)
 - [x] First publication

@@ -65,19 +65,9 @@ class SuperiorPropaneDataUpdateCoordinator(DataUpdateCoordinator):
         self._max_threshold_override = config_entry.data.get("max_consumption_threshold")
 
     async def async_load_consumption_data(self) -> None:
-        """Load consumption data from storage with migration support."""
+        """Load consumption data from storage."""
         stored_data = await self._store.async_load()
         if stored_data:
-            # Check if migration is needed from v1 to v2
-            stored_version = stored_data.get("version", 1)  # v1 didn't have version field
-
-            if stored_version == 1:
-                # Migrate from v1 to v2 format
-                LOGGER.info("Migrating consumption data from v1 to v2 format")
-                # v1 format had same structure, just add version marker
-                stored_data["version"] = STORAGE_VERSION
-                await self._store.async_save(stored_data)
-
             self._consumption_totals = stored_data.get("consumption_totals", {})
             self._previous_readings = stored_data.get("previous_readings", {})
             LOGGER.debug("Loaded consumption data: %s", self._consumption_totals)
@@ -343,7 +333,7 @@ class SuperiorPropaneDataUpdateCoordinator(DataUpdateCoordinator):
         last_delivery = tank.get("last_delivery", "Unknown")
         if last_delivery != "Unknown":
             try:
-                delivery_date = datetime.strptime(last_delivery, "%m/%d/%Y").replace(tzinfo=UTC)
+                delivery_date = datetime.strptime(last_delivery, "%Y-%m-%d").replace(tzinfo=UTC)
                 current_date = datetime.now(UTC)
                 days_since = (current_date - delivery_date).days
                 tank["days_since_delivery"] = days_since
@@ -356,7 +346,6 @@ class SuperiorPropaneDataUpdateCoordinator(DataUpdateCoordinator):
         """Update data via library."""
         try:
             tanks_data = await self.config_entry.runtime_data.client.async_get_tanks_data()
-            LOGGER.debug("Raw tank data from API: %s", json.dumps(tanks_data, indent=2))
 
             # Process each tank for consumption tracking
             for tank in tanks_data:
