@@ -31,13 +31,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: SuperiorPropaneConfigEnt
     coordinator = entry.runtime_data.coordinator
 
     # Wait for first data fetch to discover tanks
-    if not coordinator.data:
+    if not coordinator.data or "tanks" not in coordinator.data:
         LOGGER.warning("No tank data available during sensor setup")
         return
 
     entities = []
 
-    for tank_data in coordinator.data:
+    for tank_data in coordinator.data["tanks"]:
         if not isinstance(tank_data, dict):
             continue
 
@@ -78,12 +78,11 @@ class SuperiorPropaneLevelSensor(SuperiorPropaneEntity, SensorEntity):
         self._attr_unique_id = f"{DOMAIN}_{tank_data['customer_number']}_{tank_data['tank_id']}_level"
         self._attr_name = "Level"
         self._attr_native_unit_of_measurement = PERCENTAGE
-        self._attr_device_class = None
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = "mdi:gauge"
 
     @property
-    def native_value(self) -> float | None:
+    def native_value(self) -> int | None:
         """Return the current tank level percentage."""
         tank_data = self._get_tank_data()
         if not tank_data:
@@ -94,7 +93,7 @@ class SuperiorPropaneLevelSensor(SuperiorPropaneEntity, SensorEntity):
             return None
 
         try:
-            return float(level_str)
+            return int(float(level_str))
         except (ValueError, TypeError):
             return None
 
@@ -137,7 +136,6 @@ class SuperiorPropaneLastSmartTankUpdateSensor(SuperiorPropaneEntity, SensorEnti
         super().__init__(coordinator, tank_data)
         self._attr_unique_id = f"{DOMAIN}_{tank_data['customer_number']}_{tank_data['tank_id']}_last_reading"
         self._attr_name = "Last SMART Tank Update"
-        self._attr_device_class = None
         self._attr_icon = "mdi:calendar-clock"
 
     @property
@@ -159,7 +157,6 @@ class SuperiorPropaneLastDeliverySensor(SuperiorPropaneEntity, SensorEntity):
         super().__init__(coordinator, tank_data)
         self._attr_unique_id = f"{DOMAIN}_{tank_data['customer_number']}_{tank_data['tank_id']}_last_delivery"
         self._attr_name = "Last Delivery"
-        self._attr_device_class = None
         self._attr_icon = "mdi:truck-delivery"
 
     @property
@@ -182,7 +179,6 @@ class SuperiorPropaneDaysSinceDeliverySensor(SuperiorPropaneEntity, SensorEntity
         self._attr_unique_id = f"{DOMAIN}_{tank_data['customer_number']}_{tank_data['tank_id']}_days_since_delivery"
         self._attr_name = "Days Since Delivery"
         self._attr_native_unit_of_measurement = UnitOfTime.DAYS
-        self._attr_device_class = None
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = "mdi:calendar-today"
 
@@ -238,7 +234,6 @@ class SuperiorPropaneConsumptionRateSensor(SuperiorPropaneEntity, SensorEntity):
         self._attr_unique_id = f"{DOMAIN}_{tank_data['customer_number']}_{tank_data['tank_id']}_consumption_rate"
         self._attr_name = "Consumption Rate"
         self._attr_native_unit_of_measurement = "m³/h"
-        self._attr_device_class = None
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = "mdi:speedometer"
 
@@ -260,7 +255,6 @@ class SuperiorPropaneDataQualitySensor(SuperiorPropaneEntity, SensorEntity):
         super().__init__(coordinator, tank_data)
         self._attr_unique_id = f"{DOMAIN}_{tank_data['customer_number']}_{tank_data['tank_id']}_data_quality"
         self._attr_name = "Data Quality"
-        self._attr_device_class = None
         self._attr_state_class = None
         self._attr_icon = "mdi:shield-check"
 
@@ -330,7 +324,9 @@ class SuperiorPropaneAveragePriceSensor(SuperiorPropaneEntity, SensorEntity):
     @property
     def native_value(self) -> float | None:
         """Return the average price per liter, rounded to two decimal places."""
-        price = self.coordinator.account_data.get("average_price")
-        if price is not None:
-            return round(price, 2)
+        orders_data = self.coordinator.data.get("orders") if self.coordinator.data else None
+        if orders_data:
+            price = orders_data.get("average_price")
+            if price is not None:
+                return round(price, 2)
         return None

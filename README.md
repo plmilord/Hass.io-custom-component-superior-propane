@@ -42,7 +42,6 @@ For each propane tank on your Superior Propane account, the integration provides
 ### Key Indicators
 - **Level** (%) - Current tank fill percentage according to the monitoring system
 - **Current Volume** - Exact volume currently in the tank in your unit system
-- **Capacity** - Total tank size in your unit system
 
 ### Delivery and Maintenance Information
 - **Last SMART Tank Update** - Date of last level measurement by Superior Propane
@@ -81,18 +80,9 @@ Copy the `custom_components/superior_propane` to your custom_components folder. 
 ### To do
 
 - [ ] Ability to configure this custom component via entries in the configuration.yaml file
-- [ ] Code cleanup
-- [ ] Review authentication to the Superior Propane website and adjust refresh rates based on reading frequency
+- [ ] Adjust refresh rates based on reading frequency
 - [ ] Validated proper operation when there is more than one tank in the customer account
 - [ ] Add delivery switch when 'adds_delivery_date' is not declared
-
-### Completed
-
-- [x] Checking the consistency of the code, especially coordinator.py (among other things, so that variables are populated correctly)
-- [x] Added a sensor to represent the average price paid
-- [x] Home Assistant Brands (icons and logos)
-- [x] First publication
-- [x] Adapted the code to the Canadian site
 
 ## Inspiration / Credits
 

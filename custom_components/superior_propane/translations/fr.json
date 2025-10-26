@@ -1,0 +1,52 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "Superior Propane",
+                "description": "Entrez vos identifiants de compte Superior Propane pour configurer l'intégration.",
+                "data": {
+                    "username": "Adresse e-mail",
+                    "password": "Mot de passe",
+                    "update_interval": "Intervalle de mise à jour (secondes)",
+                    "adaptive_thresholds": "Utiliser des seuils de consommation dynamiques",
+                    "min_consumption_threshold": "Consommation minimale (litres par lecture)",
+                    "max_consumption_threshold": "Consommation maximale (litres par lecture)"
+                },
+                "data_description": {
+                    "adaptive_thresholds": "Ajuste automatiquement les seuils de consommation en fonction de la taille du réservoir. Recommandé pour la plupart des utilisateurs.",
+                    "min_consumption_threshold": "Utilisé uniquement lorsque les seuils dynamiques sont désactivés. Une consommation inférieure à cette valeur sera enregistrée mais journalisée.",
+                    "max_consumption_threshold": "Utilisé uniquement lorsque les seuils dynamiques sont désactivés. Une consommation supérieure à cette valeur sera marquée comme anormale mais enregistrée."
+                }
+            }
+        },
+        "error": {
+            "auth": "Identifiants invalides. Veuillez vérifier votre e-mail et votre mot de passe.",
+            "connection": "Impossible de se connecter aux serveurs de Superior Propane.",
+            "unknown": "Une erreur inconnue s'est produite.",
+            "invalid_thresholds": "Le seuil minimum doit être inférieur au seuil maximum."
+        },
+        "abort": {
+            "already_configured": "Ce compte Superior Propane est déjà configuré."
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Configurer Superior Propane",
+                "description": "Ajustez les paramètres de votre intégration Superior Propane.",
+                "data": {
+                    "update_interval": "Intervalle de mise à jour (secondes)",
+                    "adaptive_thresholds": "Utiliser des seuils de consommation dynamiques",
+                    "min_consumption_threshold": "Consommation minimale (litres par lecture)",
+                    "max_consumption_threshold": "Consommation maximale (litres par lecture)"
+                },
+                "data_description": {
+                    "update_interval": "Fréquence de vérification des nouvelles lectures du réservoir (minimum 5 minutes).",
+                    "adaptive_thresholds": "Ajuste automatiquement les seuils de consommation en fonction de la taille du réservoir. Recommandé pour la plupart des utilisateurs.",
+                    "min_consumption_threshold": "Utilisé uniquement lorsque les seuils dynamiques sont désactivés. Une consommation inférieure à cette valeur sera enregistrée mais journalisée.",
+                    "max_consumption_threshold": "Utilisé uniquement lorsque les seuils dynamiques sont désactivés. Une consommation supérieure à cette valeur sera marquée comme anormale mais enregistrée."
+                }
+            }
+        }
+    }
+}

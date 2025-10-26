@@ -25,6 +25,7 @@ from .const import (
     MAX_CONSUMPTION_PERCENTAGE,
     MIN_CONSUMPTION_PERCENTAGE,
     PERCENT_MULTIPLIER,
+    RETRY_INTERVAL,
     SECONDS_PER_HOUR,
     TANK_SIZE_MAX,
     TANK_SIZE_MIN,
@@ -51,10 +52,13 @@ class SuperiorPropaneDataUpdateCoordinator(DataUpdateCoordinator):
             LOGGER,
             name="Superior Propane",
             update_interval=timedelta(
-                seconds=config_entry.data.get("update_interval", 3600)
+                seconds=config_entry.data.get("update_interval", 7200)
             ),
         )
-        self.account_data: dict[str, Any] = {}
+        self._normal_interval = timedelta(seconds=config_entry.data.get("update_interval", 7200))
+        self._retry_interval = timedelta(seconds=RETRY_INTERVAL)
+        self.update_interval = self._normal_interval  # Start with normal interval
+        self.orders_data: dict[str, Any] = {}
         self.config_entry = config_entry
         self._previous_readings: dict[str, float] = {}
         self._consumption_totals: dict[str, float] = {}
@@ -342,10 +346,10 @@ class SuperiorPropaneDataUpdateCoordinator(DataUpdateCoordinator):
         else:
             tank["days_since_delivery"] = "Unknown"
 
-    async def _async_update_data(self) -> list[dict[str, Any]]:
+    async def _async_update_data(self) -> dict[str, Any]:
         """Update data via library."""
         try:
-            tanks_data = await self.config_entry.runtime_data.client.async_get_tanks_data()
+            tanks_data, orders_totals = await self.config_entry.runtime_data.client.async_get_all_data()
 
             # Process each tank for consumption tracking
             for tank in tanks_data:
@@ -355,14 +359,13 @@ class SuperiorPropaneDataUpdateCoordinator(DataUpdateCoordinator):
                     if tank_id and self._data_quality_flags.get(tank_id) != "Good":
                         LOGGER.info("Tank %s data quality: %s", tank_id, self._data_quality_flags.get(tank_id, "Unknown"))
                 except Exception as processing_error:
-                    LOGGER.error("Error processing tank data: %s - Continuing with other tanks", processing_error, exc_info=True)
+                    LOGGER.error("Error processing tank data: %s", processing_error, exc_info=True)
 
-            # Fetch and compute orders totals (account-wide)
-            orders_totals = await self.config_entry.runtime_data.client.async_get_orders_totals()
-            total_litres = orders_totals.get("total_litres", 0.0)
-            total_cost = orders_totals.get("total_cost", 0.0)
-            average_price = total_cost / total_litres if total_litres > 0 else 0.0
-            self.account_data = {
+            # Process orders totals (account-wide)
+            total_litres = int(orders_totals.get("total_litres", 0))
+            total_cost = round(float(orders_totals.get("total_cost", 0.0)), 2)
+            average_price = round(total_cost / total_litres, 2) if total_litres > 0 else 0.0
+            self.orders_data = {
                 "total_litres": total_litres,
                 "total_cost": total_cost,
                 "average_price": average_price,
@@ -371,9 +374,27 @@ class SuperiorPropaneDataUpdateCoordinator(DataUpdateCoordinator):
             # Save consumption data...
             await self.async_save_consumption_data()
 
-            return tanks_data
+            # Success: Switch back to normal interval
+            self.update_interval = self._normal_interval
+            LOGGER.debug("Update successful, using normal interval: %s", self.update_interval)
+
+            return {
+                "tanks": tanks_data,
+                "orders": self.orders_data
+            }
 
         except SuperiorPropaneApiClientAuthenticationError as exception:
+            # Error: Switch to retry interval
+            self.update_interval = self._retry_interval
+            LOGGER.warning("Authentication error, switching to retry interval: %s", self.update_interval)
             raise ConfigEntryAuthFailed(exception) from exception
         except SuperiorPropaneApiClientError as exception:
+            # Error: Switch to retry interval
+            self.update_interval = self._retry_interval
+            LOGGER.warning("API error, switching to retry interval: %s", self.update_interval)
             raise UpdateFailed(exception) from exception
+        except Exception as exception:
+            # Catch-all for unexpected errors (e.g., timeout, network issues)
+            self.update_interval = self._retry_interval
+            LOGGER.error("Unexpected error during update, switching to retry interval: %s", self.update_interval)
+            raise UpdateFailed(f"Unexpected error: {exception}") from exception
