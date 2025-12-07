@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any
 import asyncio
 from datetime import datetime
+from typing import TYPE_CHECKING, Any
 
+import aiohttp
 import async_timeout
 from bs4 import BeautifulSoup
 
 from .const import (
+    DASHBOARD_URL,
     LOGGER,
     LOGIN_PAGE_URL,
     LOGIN_URL,
@@ -20,54 +22,42 @@ from .const import (
     TANK_DATA_URL,
 )
 
-# Error messages
-SESSION_EXPIRED_MSG = "Session expired"
-
-if TYPE_CHECKING:
-    import aiohttp
-
 # HTTP Status Codes
 HTTP_OK = 200
-MAX_LOGIN_RETRIES = 3  # Number of retry attempts for login and CSRF token
+
+
+class SuperiorPropaneApiClientAuthenticationError(Exception):
+    """Exception to indicate an authentication error."""
+
+
+class SuperiorPropaneApiClientCommunicationError(Exception):
+    """Exception to indicate a communication error."""
 
 
 class SuperiorPropaneApiClientError(Exception):
     """Exception to indicate a general API error."""
 
 
-class SuperiorPropaneApiClientCommunicationError(SuperiorPropaneApiClientError):
-    """Exception to indicate a communication error."""
-
-
-class SuperiorPropaneApiClientAuthenticationError(SuperiorPropaneApiClientError):
-    """Exception to indicate an authentication error."""
-
-
 class SuperiorPropaneApiClient:
     """Superior Propane API Client."""
 
-    def __init__(self, username: str, password: str, session: aiohttp.ClientSession) -> None:
+    def __init__(self, username: str, password: str, session: aiohttp.ClientSession | None = None) -> None:
         """Initialize the API client."""
         self._username = username
         self._password = password
-        self._session = session
         self._authenticated = False
         self._auth_in_progress = False
+        self._session_corrupted = False
+
+        self._session = session or aiohttp.ClientSession()
+
         self._headers = {
-            "accept": (
-                "text/html,application/xhtml+xml,application/xml;q=0.9,"
-                "image/avif,image/webp,image/apng,*/*;q=0.8,"
-                "application/signed-exchange;v=b3;q=0.7"
-            ),
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "accept-language": "en-US,en;q=0.9,fr-CA;q=0.8",
-            "cache-control": "no-cache, no-store, must-revalidate",
+            "cache-control": "no-cache",
             "pragma": "no-cache",
-            "content-type": "application/x-www-form-urlencoded",
             "origin": "https://mysuperior.superiorpropane.com",
-            "referer": "https://mysuperior.superiorpropane.com/account/individualLogin",
-            "sec-ch-ua": (
-                '"Google Chrome";v="129", "Not=A?Brand";v="99", "Chromium";v="129"'
-            ),
+            "sec-ch-ua": '"Chromium";v="129", "Not=A?Brand";v="8", "Google Chrome";v="129"',
             "sec-ch-ua-mobile": "?0",
             "sec-ch-ua-platform": '"Windows"',
             "sec-fetch-dest": "document",
@@ -83,18 +73,148 @@ class SuperiorPropaneApiClient:
         }
 
     async def async_get_all_data(self) -> tuple[list[dict[str, Any]], dict[str, float]]:
-        """Get all data (tanks and orders totals) from the API."""
+        """Get all data from the Superior Propane."""
+        await self._ensure_valid_session()
+        self._session.cookie_jar.clear()
+        self._authenticated = False
         await self._ensure_authenticated()
+
         tanks_data = await self._get_tanks_from_api()
         orders_totals = await self._get_orders_totals()
         return tanks_data, orders_totals
 
+    async def async_test_connection(self) -> bool:
+        """Test if we can connect and authenticate."""
+        try:
+            tanks_data = await self.async_get_all_data()
+            return len(tanks_data) > 0
+
+        except SuperiorPropaneApiClientAuthenticationError:
+            return False
+
+        except SuperiorPropaneApiClientError:
+            return False
+
+    async def _authenticate(self) -> None:
+        if self._auth_in_progress:
+            return
+
+        self._auth_in_progress = True
+
+        try:
+            LOGGER.debug("Starting authentication sequence")
+
+            # Load the login page to initialize cookies if needed
+            async with async_timeout.timeout(60):
+                response = await self._session.get(LOGIN_PAGE_URL, headers=self._headers, allow_redirects=True)
+
+                if "maintenance" in str(response.url):
+                    raise SuperiorPropaneApiClientCommunicationError("Site under scheduled maintenance")
+
+                if response.status != HTTP_OK:
+                    raise SuperiorPropaneApiClientCommunicationError(f"Login page returned {response.status}")
+
+                await response.text()
+
+            csrf_token = await self._get_csrf_token()
+
+            if not csrf_token:
+                raise SuperiorPropaneApiClientAuthenticationError("CSRF token not found in login page")
+
+            await self._login(csrf_token)
+
+            self._authenticated = True
+            LOGGER.debug("Authentication successful")
+
+        except SuperiorPropaneApiClientAuthenticationError as e:
+            self._authenticated = False
+            raise
+
+        except (asyncio.TimeoutError, SuperiorPropaneApiClientCommunicationError):
+            self._authenticated = False
+            raise
+
+        except Exception as e:
+            self._authenticated = False
+            raise SuperiorPropaneApiClientAuthenticationError(f"Authentication failed: {str(e)}") from e
+
+        finally:
+            self._auth_in_progress = False
+
+    async def _ensure_authenticated(self) -> None:
+        if self._authenticated:
+            try:
+                async with async_timeout.timeout(60):
+                    response = await self._session.get(DASHBOARD_URL, headers=self._headers, allow_redirects=True)
+
+                    if "individualLogin" in str(response.url):
+                        LOGGER.debug("Redirected to login, forcing re-authentication")
+                        self._authenticated = False
+
+                    if response.status != HTTP_OK:
+                        LOGGER.debug("HTTP request failed, forcing re-authentication")
+                        self._authenticated = False
+
+            except Exception as e:
+                LOGGER.warning("Error validating session: %s", e)
+                self._authenticated = False
+
+        if not self._authenticated:
+            await self._authenticate()
+            await asyncio.sleep(8)
+
+    async def _ensure_valid_session(self) -> None:
+        """Recreate the session if it is suspected of being corrupted."""
+        if self._session_corrupted:
+            LOGGER.debug("Destroying corrupted aiohttp session and creating a new one")
+            await self._session.close()
+            self._session = aiohttp.ClientSession()
+            self._session_corrupted = False
+            self._authenticated = False
+
+    async def _get_csrf_token(self) -> str:
+        """Get CSRF token from cookies ('csrf_cookie_name')."""
+        csrf_token = None
+        for cookie in self._session.cookie_jar:
+            if cookie.key == "csrf_cookie_name":
+                csrf_token = cookie.value
+                break
+
+        if csrf_token:
+            LOGGER.debug("Found CSRF token in cookie: %s", csrf_token)
+            return csrf_token
+
+        # If not found, fetch login page to set the cookie
+        LOGGER.debug("CSRF cookie not found - fetching login page to initialize")
+        for attempt in range(1, MAX_API_RETRIES + 1):
+            try:
+                async with async_timeout.timeout(60):
+                    response = await self._session.get(LOGIN_PAGE_URL, headers=self._headers)
+                    if response.status != HTTP_OK:
+                        raise SuperiorPropaneApiClientCommunicationError(f"Failed to get login page: {response.status}")
+
+                for cookie in self._session.cookie_jar:
+                    if cookie.key == "csrf_cookie_name":
+                        LOGGER.debug("CSRF token obtained after page load: %s", cookie.value)
+                        return cookie.value
+
+                LOGGER.warning("CSRF token still not found after fetching page (attempt %d)", attempt)
+                if attempt == MAX_API_RETRIES:
+                    raise SuperiorPropaneApiClientAuthenticationError("CSRF cookie 'csrf_cookie_name' not found")
+
+                await asyncio.sleep(3 + (attempt * 2))
+
+            except (asyncio.TimeoutError, SuperiorPropaneApiClientCommunicationError) as e:
+                LOGGER.warning("Timeout getting CSRF token (attempt %d): %s", attempt, e)
+                if attempt == MAX_API_RETRIES:
+                    raise SuperiorPropaneApiClientCommunicationError("Timeout getting CSRF token after retries")
+
+        raise SuperiorPropaneApiClientAuthenticationError("Unable to obtain CSRF token")
+
     async def _get_orders_totals(self) -> dict[str, float]:
         """Get orders history and compute totals."""
-        await self._ensure_authenticated()
-        
         orders_totals = {"total_litres": 0, "total_cost": 0.0}
-        
+
         for attempt in range(1, MAX_API_RETRIES + 1):
             try:
                 csrf_token = await self._get_csrf_token()
@@ -102,152 +222,57 @@ class SuperiorPropaneApiClient:
                     "csrf_superior_token": csrf_token,
                     "firstRun": "true",
                 }
-                async with async_timeout.timeout(10):
-                    response = await self._session.post(ORDERS_URL, headers=self._headers, data=payload)
-                    if "Login" in str(response.url):
-                        LOGGER.debug("Redirected to login page, session expired")
-                        self._authenticated = False
-                        raise SuperiorPropaneApiClientAuthenticationError(SESSION_EXPIRED_MSG)
+
+                api_headers = self._headers.copy()
+                api_headers.update({
+                    "content-type": "application/x-www-form-urlencoded",
+                    "referer": DASHBOARD_URL,
+                    "x-requested-with": "XMLHttpRequest",
+                })
+
+                async with async_timeout.timeout(60):
+                    response = await self._session.post(ORDERS_URL, headers=api_headers, data=payload)
+
                     if response.status != HTTP_OK:
-                        msg = f"Failed to get orders data: {response.status}"
-                        raise SuperiorPropaneApiClientCommunicationError(msg)
+                        raise SuperiorPropaneApiClientCommunicationError(f"Failed to get orders: {response.status}")
 
                     data_html = await response.text()
-                    LOGGER.debug("Orders response (first 2000 chars): %s", data_html[:2000])
+                    #LOGGER.debug("Orders response (first 2000 chars): %s", data_html[:2000])
 
-                    # Parse HTML snippet
                     soup = BeautifulSoup(data_html, 'html.parser')
-                    rows = soup.find_all('div', class_='orders__row cf')  # Fixed class name
+                    rows = soup.find_all('div', class_='orders__row cf')
 
                     for row in rows:
                         cols = row.find_all('div')
                         if len(cols) == 5:
                             product = cols[2].text.strip().upper()
-                            if "PROPANE" in product:  # Filter on propane only
-                                amount_str = cols[3].text.strip().split()[0]  # "283" from "283 litres"
-                                price_str = cols[4].text.strip().lstrip('$')  # "264.81" from "$264.81"
+                            if "PROPANE" in product:
                                 try:
+                                    amount_str = cols[3].text.strip().split()[0]
+                                    price_str = cols[4].text.strip().lstrip('$')
                                     litres = int(float(amount_str))
                                     cost = round(float(price_str), 2)
                                     orders_totals['total_litres'] += litres
                                     orders_totals['total_cost'] = round(orders_totals['total_cost'] + cost, 2)
                                     LOGGER.debug("Processed order: %d litres, %.2f $", litres, cost)
                                 except ValueError as e:
-                                    LOGGER.warning("Invalid amount or price in row: %s, error: %s", row.text.strip(), e)
+                                    LOGGER.warning("Invalid order data: %s | Error: %s", row.text.strip(), e)
 
                     LOGGER.debug("Final totals: %d litres, %.2f $", orders_totals['total_litres'], orders_totals['total_cost'])
-                    return orders_totals  # Success, exit retry loop
+                    return orders_totals  # Success
 
-            except (TimeoutError, SuperiorPropaneApiClientCommunicationError) as exception:
-                LOGGER.warning("Error getting orders data on attempt %d: %s", attempt, exception)
+            except (asyncio.TimeoutError, SuperiorPropaneApiClientCommunicationError) as e:
+                LOGGER.debug("Error getting orders (attempt %d): %s", attempt, e)
                 if attempt == MAX_API_RETRIES:
-                    LOGGER.error("Exhausted all retry attempts for Orders API")
-                    raise SuperiorPropaneApiClientError(f"Failed to get orders data: {exception}") from exception
-                LOGGER.debug("Retrying Orders API call after %.1f seconds (attempt %d/%d)", RETRY_DELAY_SECONDS, attempt + 1, MAX_API_RETRIES)
-                await asyncio.sleep(RETRY_DELAY_SECONDS)
-                continue
+                    self._session_corrupted = True
+                    LOGGER.debug("Marking session as corrupted after %d failed tank attempts – will recreate on next update",   )
+                    raise SuperiorPropaneApiClientCommunicationError("Failed to get orders after retries")
+                await asyncio.sleep(RETRY_DELAY_SECONDS + (attempt * 10))
+
             except SuperiorPropaneApiClientAuthenticationError:
-                self._authenticated = False
-                raise  # Propagate the error so that async_get_all_data handles re-authentication
+                raise  # Propagate for re-authentication
 
-    async def _ensure_authenticated(self) -> None:
-        """Ensure we have a valid authenticated session."""
-        if self._authenticated:
-            LOGGER.debug("Already authenticated, reusing existing session")
-            return
-
-        LOGGER.debug("Performing authentication")
-        self._session.cookie_jar.clear()
-        await self._authenticate()
-        self._authenticated = True
-
-    async def _authenticate(self) -> None:
-        """Perform full authentication sequence."""
-        if self._auth_in_progress:
-            return
-        self._auth_in_progress = True
-        try:
-            LOGGER.debug("Starting authentication sequence")
-            self._session.cookie_jar.clear()
-            csrf_token = await self._get_csrf_token()
-            await self._login(csrf_token)
-            self._authenticated = True
-            LOGGER.debug("Authentication completed successfully")
-        except Exception:
-            self._authenticated = False
-            raise
-        finally:
-            self._auth_in_progress = False
-
-    async def _get_csrf_token(self) -> str:
-        """Get CSRF token from cookies."""
-        retries = MAX_LOGIN_RETRIES
-        for attempt in range(1, retries + 1):
-            try:
-                async with async_timeout.timeout(60):
-                    response = await self._session.get(LOGIN_PAGE_URL, headers=self._headers)
-                    if response.status != HTTP_OK:
-                        msg = f"Failed to get login page: {response.status}"
-                        raise SuperiorPropaneApiClientCommunicationError(msg)
-
-                    csrf_cookie = response.cookies.get("csrf_cookie_name")
-                    if not csrf_cookie or not csrf_cookie.value:
-                        msg = "CSRF token not found in cookies"
-                        LOGGER.warning(msg)
-                        return ""  # Fallback to empty token
-
-                    LOGGER.debug("Found CSRF token in cookie: %s", csrf_cookie.value)
-                    return csrf_cookie.value
-
-            except TimeoutError as exception:
-                LOGGER.warning("Timeout getting CSRF token attempt %d: %s", attempt, exception)
-                if attempt == retries:
-                    msg = f"Timeout getting CSRF token after {retries} attempts: {exception}"
-                    raise SuperiorPropaneApiClientCommunicationError(msg) from exception
-                await asyncio.sleep(2)  # Wait before retrying
-
-    async def _login(self, csrf_token: str) -> None:
-        """Login to Superior Propane."""
-        payload = {
-            "login_email": self._username,
-            "login_password": self._password,
-            "remember": "true",
-        }
-        if csrf_token:
-            payload["csrf_superior_token"] = csrf_token
-
-        retries = MAX_LOGIN_RETRIES
-        for attempt in range(1, retries + 1):
-            try:
-                async with async_timeout.timeout(60):
-                    response = await self._session.post(LOGIN_URL, headers=self._headers, data=payload)
-                    html = await response.text()
-                    LOGGER.debug("Login response status (attempt %d): %s, URL: %s", attempt, response.status, response.url)
-
-                    # Check for JSON error response
-                    try:
-                        response_json = json.loads(html)
-                        if response_json.get("status") == "error":
-                            msg = f"Login failed: {response_json.get('message', 'Unknown error')}"
-                            raise SuperiorPropaneApiClientAuthenticationError(msg)
-                    except json.JSONDecodeError:
-                        # Not JSON, check URL for login page redirect
-                        if "Login" in str(response.url) or response.status != HTTP_OK:
-                            msg = "Login failed - invalid credentials or server rejection (check logs for details)"
-                            raise SuperiorPropaneApiClientAuthenticationError(msg)
-                    return  # Success, exit retry loop
-
-            except TimeoutError as exception:
-                LOGGER.warning("Timeout during login attempt %d: %s", attempt, exception)
-                if attempt == retries:
-                    msg = f"Timeout during login after {retries} attempts: {exception}"
-                    raise SuperiorPropaneApiClientCommunicationError(msg) from exception
-                await asyncio.sleep(2)  # Wait before retrying
-            except SuperiorPropaneApiClientAuthenticationError as e:
-                LOGGER.debug("Authentication error on attempt %d: %s", attempt, e)
-                if attempt == retries:
-                    raise
-                await asyncio.sleep(2)
+        raise SuperiorPropaneApiClientError("Failed to get orders totals")
 
     async def _get_tanks_from_api(self) -> list[dict[str, Any]]:
         """Get tank data from the tank API endpoint."""
@@ -267,32 +292,29 @@ class SuperiorPropaneApiClient:
                         "firstRun": "true" if offset == 0 else "false",
                         "listIndex": str(offset + 1),
                     }
-                    async with async_timeout.timeout(10):
-                        response = await self._session.post(TANK_DATA_URL, headers=self._headers, data=payload)
-                        if "Login" in str(response.url):
-                            LOGGER.debug("Redirected to login page, session expired")
-                            self._authenticated = False
-                            raise SuperiorPropaneApiClientAuthenticationError(SESSION_EXPIRED_MSG)
-                        if response.status != HTTP_OK:
-                            msg = f"Failed to get tank data: {response.status}"
-                            raise SuperiorPropaneApiClientCommunicationError(msg)
 
-                        response_text = await response.text()
-                        try:
-                            response_json = json.loads(response_text)
-                            tank_list = json.loads(response_json.get("data", "[]"))
-                            LOGGER.debug("Tank API data: %s", json.dumps(tank_list, indent=2)[:2000])
-                            if not response_json.get("status"):
-                                msg = f"Tank API returned error: {response_json.get('message', 'Unknown error')}"
-                                raise SuperiorPropaneApiClientError(msg)
-                        except json.JSONDecodeError as json_error:
-                            LOGGER.warning("Failed to parse Tank API response as JSON on attempt %d: %s", attempt, json_error)
-                            if attempt == MAX_API_RETRIES:
-                                LOGGER.error("Exhausted all retry attempts for Tank API")
-                                raise SuperiorPropaneApiClientError("Failed to parse tank API response as JSON") from json_error
-                            LOGGER.debug("Retrying Tank API call after %.1f seconds (attempt %d/%d)", RETRY_DELAY_SECONDS, attempt + 1, MAX_API_RETRIES)
-                            await asyncio.sleep(RETRY_DELAY_SECONDS)
-                            continue
+                    api_headers = self._headers.copy()
+                    api_headers.update({
+                        "content-type": "application/x-www-form-urlencoded",
+                        "referer": DASHBOARD_URL,
+                        "x-requested-with": "XMLHttpRequest",
+                    })
+
+                    async with async_timeout.timeout(60):
+                        response = await self._session.post(TANK_DATA_URL, headers=api_headers, data=payload)
+
+                        if response.status != HTTP_OK:
+                            raise SuperiorPropaneApiClientCommunicationError(f"Failed to get tank data: {response.status}")
+
+                        data_html = await response.text()
+                        #LOGGER.debug("Tank API raw response (first 500 chars): %s", data_html[:500])
+
+                        response_json = json.loads(data_html)
+                        tank_list = json.loads(response_json.get("data", "[]"))
+                        #LOGGER.debug("Tank API data: %s", json.dumps(tank_list, indent=2)[:2000])
+
+                        if not response_json.get("status"):
+                            raise SuperiorPropaneApiClientError(f"Tank API error: {response_json.get('message', 'Unknown')}")
 
                         for idx, tank in enumerate(tank_list, offset + 1):
                             tank_data = self._parse_tank_json(tank, idx)
@@ -301,35 +323,87 @@ class SuperiorPropaneApiClient:
 
                         finished = response_json.get("finished", True)
                         offset += limit
-                        break  # Success: Exit the retry loop
+                        break  # Success
 
-                except TimeoutError as exception:
-                    msg = f"Timeout getting tank data: {exception}"
-                    raise SuperiorPropaneApiClientCommunicationError(msg) from exception
+                except json.JSONDecodeError as json_error:
+                    LOGGER.debug("JSON parse error (attempt %d): %s. Raw: %s", attempt, json_error, data_html[:200].replace("\n", " ").strip())
+                    if attempt == MAX_API_RETRIES:
+                        raise SuperiorPropaneApiClientError("Failed to get valid JSON after retries") from json_error
+                    await asyncio.sleep(RETRY_DELAY_SECONDS + (attempt * 10))
+
+                except (asyncio.TimeoutError, SuperiorPropaneApiClientCommunicationError) as e:
+                    LOGGER.debug("Error getting tanks (attempt %d): %s", attempt, e)
+                    if attempt == MAX_API_RETRIES:
+                        self._session_corrupted = True
+                        LOGGER.debug("Marking session as corrupted after %d failed tank attempts – will recreate on next update", MAX_API_RETRIES)
+                        raise SuperiorPropaneApiClientCommunicationError("Tank API timeout after retries")
+                    await asyncio.sleep(RETRY_DELAY_SECONDS + (attempt * 10))
+
                 except SuperiorPropaneApiClientAuthenticationError:
-                    self._authenticated = False
-                    raise  # Propagate the error so that async_get_all_data handles re-authentication
+                    raise  # Propagate for re-authentication
 
-        LOGGER.debug("Parsed %d tanks: %s", len(tanks_data), json.dumps(tanks_data, indent=2)[:2000])
+        LOGGER.debug("Parsed %d tanks", len(tanks_data))
+        #LOGGER.debug("Parsed %d tanks: %s", len(tanks_data), json.dumps(tanks_data, indent=2)[:2000])
         return tanks_data
+
+    async def _login(self, csrf_token: str) -> None:
+        """Perform login with CSRF token."""
+        payload = {
+            "csrf_superior_token": csrf_token,
+            "login_email": self._username,
+            "login_password": self._password,
+        }
+
+        login_headers = self._headers.copy()
+        login_headers.update({
+            "content-type": "application/x-www-form-urlencoded",
+            "referer": LOGIN_PAGE_URL,
+            "x-requested-with": "XMLHttpRequest",
+        })
+
+        for attempt in range(1, MAX_API_RETRIES + 1):
+            try:
+                async with async_timeout.timeout(60):
+                    response = await self._session.post(LOGIN_URL, headers=login_headers, data=payload, allow_redirects=True)
+
+                if "dashboard" in str(response.url):
+                    LOGGER.debug("Login successful - redirected to dashboard")
+                    return
+
+                if "individualLogin" in str(response.url):
+                    raise SuperiorPropaneApiClientAuthenticationError("Login failed - redirected to login")
+
+                data_html = await response.text()
+
+                raise SuperiorPropaneApiClientError(f"Unexpected login response: {data_html[:200]}")
+
+            except asyncio.TimeoutError as e:
+                LOGGER.warning("Timeout during login (attempt %d): %s", attempt, e)
+                if attempt == MAX_API_RETRIES:
+                    raise SuperiorPropaneApiClientCommunicationError("Login timeout after retries")
+                await asyncio.sleep(3 + (attempt * 2))
+
+            except SuperiorPropaneApiClientAuthenticationError as e:
+                LOGGER.warning("Authentication error (attempt %d): %s", attempt, e)
+                if attempt == MAX_API_RETRIES:
+                    raise
+                await asyncio.sleep(3 + (attempt * 2))
 
     def _parse_tank_json(self, tank: dict, tank_number: int) -> dict[str, Any] | None:
         """Parse a single tank from JSON data."""
         try:
             address = tank.get("adds_location", "Unknown")
             current_volume = tank.get("adds_fill", "Unknown")
-            #current_volume = int(float(tank.get("adds_fill", "Unknown"))) if tank.get("adds_fill", "Unknown") != "Unknown" else "Unknown"
             customer_number = tank.get("adds_customer_number", "Unknown")
             last_delivery = tank.get("adds_last_fill", "Unknown").split(" ")[0]
             last_reading = tank.get("adds_last_reading", "Unknown")
             level = tank.get("adds_fill_percentage", "Unknown")
-            #level = int(float(tank.get("adds_fill_percentage", "Unknown"))) if tank.get("adds_fill_percentage", "Unknown") != "Unknown" else "Unknown"
             tank_id = tank.get("adds_tank_id", "Unknown")
             tank_name = tank.get("tank_name", "Unknown")
             tank_serial_number = tank.get("adds_serial_number", "Unknown").strip()
             tank_size = tank.get("adds_tank_size", "Unknown")
-        except (AttributeError, ValueError, TypeError) as exception:
-            LOGGER.warning("Error parsing tank JSON %d: %s", tank_number, exception)
+        except (AttributeError, ValueError, TypeError) as e:
+            LOGGER.warning("Error parsing tank JSON %d: %s", tank_number, e)
             return None
         return {
             "address": address,
@@ -344,13 +418,3 @@ class SuperiorPropaneApiClient:
             "tank_serial_number": tank_serial_number,
             "tank_size": tank_size,
         }
-
-    async def async_test_connection(self) -> bool:
-        """Test if we can connect and authenticate."""
-        try:
-            tanks_data = await self.async_get_all_data()
-            return len(tanks_data) > 0
-        except SuperiorPropaneApiClientAuthenticationError:
-            return False
-        except SuperiorPropaneApiClientError:
-            return False

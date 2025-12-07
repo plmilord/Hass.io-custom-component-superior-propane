@@ -9,6 +9,7 @@ DOMAIN = "superior_propane"
 ATTRIBUTION = "Data provided by Superior Propane"
 
 # URLs
+DASHBOARD_URL = "https://mysuperior.superiorpropane.com/dashboard"
 LOGIN_PAGE_URL = "https://mysuperior.superiorpropane.com/account/individualLogin"
 LOGIN_URL = "https://mysuperior.superiorpropane.com/account/loginFirst"
 ORDERS_URL = "https://mysuperior.superiorpropane.com/myaccount/getAllOrders"
@@ -53,7 +54,7 @@ CURRENCY_PER_LITER = f"{CURRENCY_DOLLAR}/L"
 
 # Retry settings for API
 MAX_API_RETRIES = 4  # Maximum number of API retries
-RETRY_DELAY_SECONDS = 30  # Delay in seconds between each retry
+RETRY_DELAY_SECONDS = 60  # Delay in seconds between each retry
 
 # Retry interval in case of error
 RETRY_INTERVAL = 300  # 5 minutes

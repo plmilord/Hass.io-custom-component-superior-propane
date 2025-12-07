@@ -41,3 +41,12 @@ class SuperiorPropaneEntity(CoordinatorEntity[SuperiorPropaneDataUpdateCoordinat
         tanks = self.coordinator.data.get("tanks", [])
         tank_dict = {tank.get("tank_id"): tank for tank in tanks if isinstance(tank, dict)}
         return tank_dict.get(self._tank_id)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        attrs = super().extra_state_attributes or {}
+        if self.coordinator.last_update_success:
+            attrs["last_update"] = self.coordinator.last_successful_update_time.isoformat() if self.coordinator.last_successful_update_time else "Unknown"
+        else:
+            attrs["last_update"] = "Using stale data due to temporary API issue"
+        return attrs

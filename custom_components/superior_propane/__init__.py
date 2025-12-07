@@ -22,11 +22,12 @@ PLATFORMS: list[Platform] = [Platform.SENSOR]
 
 async def async_setup_entry(hass: HomeAssistant, entry: SuperiorPropaneConfigEntry) -> bool:
     """Set up Superior Propane integration from a config entry."""
+    session = async_get_clientsession(hass)
     coordinator = SuperiorPropaneDataUpdateCoordinator(hass=hass, config_entry=entry)
     client = SuperiorPropaneApiClient(
         username=entry.data[CONF_USERNAME],
         password=entry.data[CONF_PASSWORD],
-        session=async_get_clientsession(hass),
+        session=None,
     )
     entry.runtime_data = SuperiorPropaneData(
         client=client,
@@ -35,9 +36,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SuperiorPropaneConfigEnt
     )
 
     try:
-        # Load stored consumption data before first refresh
         await coordinator.async_load_consumption_data()
-        # Perform first refresh to populate coordinator.data
         await coordinator.async_config_entry_first_refresh()
     except ConfigEntryAuthFailed as err:
         raise ConfigEntryAuthFailed("Authentication failed during setup") from err

@@ -11,6 +11,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import (
+    SuperiorPropaneApiClientCommunicationError,
     SuperiorPropaneApiClientAuthenticationError,
     SuperiorPropaneApiClientError,
 )
@@ -67,6 +68,7 @@ class SuperiorPropaneDataUpdateCoordinator(DataUpdateCoordinator):
         self._use_dynamic_thresholds = config_entry.data.get("adaptive_thresholds", True)
         self._min_threshold_override = config_entry.data.get("min_consumption_threshold")
         self._max_threshold_override = config_entry.data.get("max_consumption_threshold")
+        self.last_successful_update_time: datetime | None = None
 
     async def async_load_consumption_data(self) -> None:
         """Load consumption data from storage."""
@@ -174,134 +176,109 @@ class SuperiorPropaneDataUpdateCoordinator(DataUpdateCoordinator):
             expected_liters = ((level * tank_size) / PERCENT_MULTIPLIER if tank_size > 0 else 0)
 
             if tank_size > 0 and expected_liters > 0:
-                variance = abs(current_volume - expected_liters) / tank_size
+                variance = abs(current_volume - expected_liters) / expected_liters
                 if variance > DATA_VALIDATION_TOLERANCE:
                     LOGGER.warning(
-                        "Tank %s data inconsistency: Level %s%% suggests %.1f liters, "
-                        "but scraped value is %.1f liters (tank size: %.0f, variance: %.1f%%)",
+                        "Tank %s inconsistent data: %.2f liters vs expected %.2f (%.2f%%) - variance %.2f%%",
                         tank_id,
-                        level,
-                        expected_liters,
                         current_volume,
-                        tank_size,
+                        expected_liters,
+                        level,
                         variance * 100,
                     )
-                    self._data_quality_flags[tank_id] = "data_inconsistent"
-                    # Use calculated value as it's more reliable
-                    tank["current_volume"] = str(expected_liters)
-                    tank["data_corrected"] = True
-                else:
-                    self._data_quality_flags[tank_id] = "Good"
-        except (ValueError, TypeError, ZeroDivisionError, ArithmeticError):
-            self._data_quality_flags[tank_id] = "calculation_error"
+                    self._data_quality_flags[tank_id] = "inconsistent_values"
+                    return False
+        except (ValueError, TypeError, ZeroDivisionError):
+            self._data_quality_flags[tank_id] = "inconsistent_values"
             return False
 
+        # If all checks pass
+        self._data_quality_flags[tank_id] = "Good"
         return True
 
     def _process_tank_consumption(self, tank: dict[str, Any]) -> None:
-        """Process consumption tracking for a single tank."""
-        tank_id = tank.get("tank_id")
-        if not tank_id:
-            LOGGER.warning("Tank data missing tank_id, skipping consumption processing")
-            return
-
-        # Validate tank data first
+        """Process tank data for consumption calculation."""
+        tank_id = tank.get("tank_id", "Unknown")
         if not self._validate_tank_data(tank):
-            LOGGER.debug("Tank %s data validation failed", tank_id)
-            tank["consumption_total"] = self._consumption_totals.get(tank_id, 0.0)
-            tank["consumption_rate"] = 0.0
-            tank["data_quality"] = self._data_quality_flags.get(tank_id, "Unknown")
+            LOGGER.warning("Skipping consumption calculation for tank %s due to invalid data", tank_id)
             return
 
-        current_volume_str = tank.get("current_volume", "0")
-
-        # Convert to float, handle "Unknown" values
         try:
-            current_volume = float(current_volume_str)
-            tank_size = float(tank.get("tank_size", 500))  # Default to 500 if missing
+            current_volume = float(tank.get("current_volume", 0))
+            tank_size = float(tank.get("tank_size", 0))
         except (ValueError, TypeError):
-            tank["consumption_total"] = self._consumption_totals.get(tank_id, 0.0)
-            tank["consumption_rate"] = 0.0
-            tank["data_quality"] = "invalid_data"
+            LOGGER.warning("Invalid volume or size for tank %s, skipping consumption", tank_id)
             return
 
-        # Calculate dynamic thresholds
-        update_interval_hours = max(0.001, self.update_interval.total_seconds() / SECONDS_PER_HOUR)  # Prevent division by zero
+        update_interval_hours = self.update_interval.total_seconds() / SECONDS_PER_HOUR
         min_threshold, max_threshold = self._calculate_dynamic_thresholds(tank_size, update_interval_hours)
 
-        # Calculate consumption if we have a previous reading
-        if tank_id in self._previous_readings:
-            previous_liters = self._previous_readings[tank_id]
-            consumption_liters = previous_liters - current_volume
+        previous_liters = self._previous_readings.get(tank_id, current_volume)
+        consumption_liters = previous_liters - current_volume
 
-            # Handle tank refills (negative consumption)
-            if consumption_liters < 0:
-                # Tank was refilled - log but don't count as consumption
-                try:
-                    if tank_size > 0:
-                        LOGGER.info(
-                            "Tank %s was refilled: %.2f -> %.2f liters (%.1f%% -> %.1f%%)",
-                            tank_id,
-                            previous_liters,
-                            current_volume,
-                            (previous_liters / tank_size) * PERCENT_MULTIPLIER,
-                            (current_volume / tank_size) * PERCENT_MULTIPLIER,
-                        )
-                    else:
-                        LOGGER.info(
-                            "Tank %s was refilled: %.2f -> %.2f liters",
-                            tank_id,
-                            previous_liters,
-                            current_volume,
-                        )
-                except (ZeroDivisionError, ArithmeticError):
-                    LOGGER.info(
-                        "Tank %s was refilled: %.2f -> %.2f liters",
-                        tank_id,
-                        previous_liters,
-                        current_volume,
-                    )
-                tank["refill_detected"] = True
-            # Check against dynamic thresholds
-            elif consumption_liters > 0:
-                # Convert liters to cubic meters and add to total
-                consumption_m3 = consumption_liters * LITERS_TO_CUBIC_METERS
+        tank["refill_detected"] = False
+        tank["consumption_anomaly"] = False
 
-                if tank_id not in self._consumption_totals:
-                    self._consumption_totals[tank_id] = 0.0
+        # Handle potential refill (increase in level)
+        if consumption_liters < 0:
+            tank["refill_detected"] = True
+            try:
+                LOGGER.info(
+                    "Tank %s refilled: %.2f%% (%.2f L) -> %.2f%% (%.2f L)",
+                    tank_id,
+                    (previous_liters / tank_size) * PERCENT_MULTIPLIER,
+                    previous_liters,
+                    (current_volume / tank_size) * PERCENT_MULTIPLIER,
+                    current_volume,
+                )
+            except (ZeroDivisionError, ArithmeticError):
+                LOGGER.info(
+                    "Tank %s was refilled: %.2f -> %.2f liters",
+                    tank_id,
+                    previous_liters,
+                    current_volume,
+                )
 
-                # Log based on threshold validation
-                if consumption_liters < min_threshold:
-                    LOGGER.info(
-                        "Tank %s low consumption: %.3f liters (%.4f m³) [below threshold: %.3f]",
-                        tank_id,
-                        consumption_liters,
-                        consumption_m3,
-                        min_threshold,
-                    )
-                    # Still record it for accuracy
-                    self._consumption_totals[tank_id] += consumption_m3
-                elif consumption_liters > max_threshold:
-                    LOGGER.warning(
-                        "Tank %s high consumption: %.2f liters (%.3f m³) [above threshold: %.2f] - recording with anomaly flag",
-                        tank_id,
-                        consumption_liters,
-                        consumption_m3,
-                        max_threshold,
-                    )
-                    # Record but flag as anomaly
-                    self._consumption_totals[tank_id] += consumption_m3
-                    tank["consumption_anomaly"] = True
-                else:
-                    # Normal consumption
-                    self._consumption_totals[tank_id] += consumption_m3
-                    LOGGER.debug(
-                        "Tank %s consumed %.2f liters (%.3f m³). Total: %.3f m³",
-                        tank_id,
-                        consumption_liters,
-                        consumption_m3,
-                        self._consumption_totals[tank_id],
-                    )
+        # Check against dynamic thresholds
+        elif consumption_liters > 0:
+            # Convert liters to cubic meters and add to total
+            consumption_m3 = consumption_liters * LITERS_TO_CUBIC_METERS
+
+            if tank_id not in self._consumption_totals:
+                self._consumption_totals[tank_id] = 0.0
+
+            # Log based on threshold validation
+            if consumption_liters < min_threshold:
+                LOGGER.info(
+                    "Tank %s low consumption: %.3f liters (%.4f m³) [below threshold: %.3f]",
+                    tank_id,
+                    consumption_liters,
+                    consumption_m3,
+                    min_threshold,
+                )
+                # Still record it for accuracy
+                self._consumption_totals[tank_id] += consumption_m3
+            elif consumption_liters > max_threshold:
+                LOGGER.warning(
+                    "Tank %s high consumption: %.2f liters (%.3f m³) [above threshold: %.2f] - recording with anomaly flag",
+                    tank_id,
+                    consumption_liters,
+                    consumption_m3,
+                    max_threshold,
+                )
+                # Record but flag as anomaly
+                self._consumption_totals[tank_id] += consumption_m3
+                tank["consumption_anomaly"] = True
+            else:
+                # Normal consumption
+                self._consumption_totals[tank_id] += consumption_m3
+                LOGGER.debug(
+                    "Tank %s consumed %.2f liters (%.3f m³). Total: %.3f m³",
+                    tank_id,
+                    consumption_liters,
+                    consumption_m3,
+                    self._consumption_totals[tank_id],
+                )
 
         # Store actual previous reading BEFORE updating for rate calculation
         actual_previous = self._previous_readings.get(tank_id)
@@ -368,7 +345,7 @@ class SuperiorPropaneDataUpdateCoordinator(DataUpdateCoordinator):
             self.orders_data = {
                 "total_litres": total_litres,
                 "total_cost": total_cost,
-                "average_price": average_price,
+                "average_price": average_price
             }
 
             # Save consumption data...
@@ -376,6 +353,7 @@ class SuperiorPropaneDataUpdateCoordinator(DataUpdateCoordinator):
 
             # Success: Switch back to normal interval
             self.update_interval = self._normal_interval
+            self.last_successful_update_time = datetime.now(UTC)
             LOGGER.debug("Update successful, using normal interval: %s", self.update_interval)
 
             return {
@@ -384,17 +362,29 @@ class SuperiorPropaneDataUpdateCoordinator(DataUpdateCoordinator):
             }
 
         except SuperiorPropaneApiClientAuthenticationError as exception:
-            # Error: Switch to retry interval
             self.update_interval = self._retry_interval
-            LOGGER.warning("Authentication error, switching to retry interval: %s", self.update_interval)
-            raise ConfigEntryAuthFailed(exception) from exception
+            LOGGER.debug("Session expired, switching to retry interval: %s", self.update_interval)
+            raise UpdateFailed(f"API authentication error: {exception}") from exception
+
+        except SuperiorPropaneApiClientCommunicationError as exception:
+            if "maintenance" in str(exception).lower():
+                self.update_interval = timedelta(hours=1)
+                LOGGER.debug("Site under maintenance, switching to retry interval: %s", self.update_interval)
+            else:
+                self.update_interval = self._retry_interval
+                LOGGER.debug("Temporary API issue, switching to retry interval: %s", self.update_interval)
+            if self.data:
+                return self.data
+            else:
+                raise UpdateFailed(f"API communication error: {exception}") from exception
+
         except SuperiorPropaneApiClientError as exception:
-            # Error: Switch to retry interval
             self.update_interval = self._retry_interval
-            LOGGER.warning("API error, switching to retry interval: %s", self.update_interval)
-            raise UpdateFailed(exception) from exception
+            LOGGER.debug("Temporary API issue, switching to retry interval: %s", self.update_interval)
+            raise UpdateFailed(f"API error: {exception}") from exception
+
         except Exception as exception:
             # Catch-all for unexpected errors (e.g., timeout, network issues)
             self.update_interval = self._retry_interval
-            LOGGER.error("Unexpected error during update, switching to retry interval: %s", self.update_interval)
+            LOGGER.debug("Unexpected error during update, switching to retry interval: %s", self.update_interval)
             raise UpdateFailed(f"Unexpected error: {exception}") from exception

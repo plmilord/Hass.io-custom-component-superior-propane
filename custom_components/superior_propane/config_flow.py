@@ -6,7 +6,6 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.helpers import selector
-from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from slugify import slugify
 
 from .api import (
@@ -131,15 +130,16 @@ class SuperiorPropaneFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             try:
                 await self._test_credentials(user_input[CONF_USERNAME], user_input[CONF_PASSWORD])
+                entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
                 self.hass.config_entries.async_update_entry(
-                    self.hass.config_entries.async_get_entry(self.context["entry_id"]),
+                    entry,
                     data={
-                        **self.hass.config_entries.async_get_entry(self.context["entry_id"]).data,
+                        **entry.data,
                         CONF_USERNAME: user_input[CONF_USERNAME],
                         CONF_PASSWORD: user_input[CONF_PASSWORD],
                     },
                 )
-                return self.async_create_entry(title="", data={})
+                return self.async_abort(reason="reauth_successful")
             except SuperiorPropaneApiClientAuthenticationError:
                 errors["base"] = "auth"
             except SuperiorPropaneApiClientCommunicationError:
@@ -160,7 +160,6 @@ class SuperiorPropaneFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
         client = SuperiorPropaneApiClient(
             username=username,
             password=password,
-            session=async_create_clientsession(self.hass),
         )
         if not await client.async_test_connection():
             raise SuperiorPropaneApiClientAuthenticationError("Invalid credentials")
