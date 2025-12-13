@@ -341,11 +341,12 @@ class SuperiorPropaneDataUpdateCoordinator(DataUpdateCoordinator):
             # Process orders totals (account-wide)
             total_litres = int(orders_totals.get("total_litres", 0))
             total_cost = round(float(orders_totals.get("total_cost", 0.0)), 2)
-            average_price = round(total_cost / total_litres, 2) if total_litres > 0 else 0.0
+            total_m3 = round(total_litres * LITERS_TO_CUBIC_METERS, 2) if total_litres > 0 else 0.0
+            average_price_per_m3 = round(total_cost / total_m3, 2) if total_m3 > 0 else 0.0
             self.orders_data = {
                 "total_litres": total_litres,
                 "total_cost": total_cost,
-                "average_price": average_price
+                "average_price": average_price_per_m3
             }
 
             # Save consumption data...

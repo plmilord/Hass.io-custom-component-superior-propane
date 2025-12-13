@@ -17,7 +17,7 @@ from homeassistant.const import (
 
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import CURRENCY_PER_LITER, DOMAIN, LOGGER
+from .const import DOMAIN, LOGGER
 from .entity import SuperiorPropaneEntity
 
 if TYPE_CHECKING:
@@ -316,7 +316,7 @@ class SuperiorPropaneAveragePriceSensor(SuperiorPropaneEntity, SensorEntity):
         super().__init__(coordinator, tank_data)
         self._attr_unique_id = f"{DOMAIN}_{tank_data['customer_number']}_{tank_data['tank_id']}_average_price"
         self._attr_name = "Average Price Paid"
-        self._attr_native_unit_of_measurement = CURRENCY_PER_LITER
+        self._attr_native_unit_of_measurement = "CAD/m³"
         self._attr_device_class = SensorDeviceClass.MONETARY
         self._attr_state_class = None
         self._attr_icon = "mdi:cash-multiple"
