@@ -39,8 +39,8 @@ DEFAULT_MAX_CONSUMPTION_LITERS = 25.0  # Raised from 10.0
 
 # Data validation
 DATA_VALIDATION_TOLERANCE = 0.10  # 10% tolerance for liters vs percentage validation
-TANK_SIZE_MIN = 20.0   # Minimum reasonable tank size
-TANK_SIZE_MAX = 2000.0 # Maximum reasonable tank size
+TANK_SIZE_MIN = 18.0   # Minimum tank size (20 lbs = ~18 litres)
+TANK_SIZE_MAX = 227125.0 # Maximum tank size (60 000 US gallons = ~227 125 litres)
 
 # Unit conversions
 # 1 litre of liquid propane = ~0.2723 cubic meters of propane gas (at 60°F, 14.73 psi)

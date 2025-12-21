@@ -248,8 +248,8 @@ class SuperiorPropaneApiClient:
                             product = cols[2].text.strip().upper()
                             if "PROPANE" in product:
                                 try:
-                                    amount_str = cols[3].text.strip().split()[0]
-                                    price_str = cols[4].text.strip().lstrip('$')
+                                    amount_str = cols[3].text.strip().split()[0].replace(',', '')
+                                    price_str = cols[4].text.strip().lstrip('$').replace(',', '')
                                     litres = int(float(amount_str))
                                     cost = round(float(price_str), 2)
                                     orders_totals['total_litres'] += litres

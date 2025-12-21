@@ -41,7 +41,7 @@ For each propane tank on your Superior Propane account, the integration provides
 
 ### Key Indicators
 - **Level** (%) - Current tank fill percentage according to the monitoring system
-- **Current Volume** - Exact volume currently in the tank in your unit system
+- **Current Volume** (L) - Exact volume currently in the tank in your unit system
 
 ### Delivery and Maintenance Information
 - **Last SMART Tank Update** - Date of last level measurement by Superior Propane
@@ -49,9 +49,9 @@ For each propane tank on your Superior Propane account, the integration provides
 - **Number of Days Since Delivery** - Automatically calculated number of days since last refill
 
 ### Energy Dashboard Integration
-- **Total Consumption** - Cumulative gas consumption with the "total_increasing" status class
-- **Consumption Rate** - Current consumption rate for trend analysis
-- **Average Price Paid** - Average price paid for propane deliveries from your account
+- **Total Consumption** (m³) - Cumulative gas consumption with the "total_increasing" status class
+- **Consumption Rate** (m³/h) - Current consumption rate for trend analysis
+- **Average Price Paid** (CAD/m³) - Average price paid for propane deliveries from your account
 
 ## What you need
 

@@ -223,7 +223,7 @@ class SuperiorPropaneDataUpdateCoordinator(DataUpdateCoordinator):
         if consumption_liters < 0:
             tank["refill_detected"] = True
             try:
-                LOGGER.info(
+                LOGGER.debug(
                     "Tank %s refilled: %.2f%% (%.2f L) -> %.2f%% (%.2f L)",
                     tank_id,
                     (previous_liters / tank_size) * PERCENT_MULTIPLIER,
@@ -232,7 +232,7 @@ class SuperiorPropaneDataUpdateCoordinator(DataUpdateCoordinator):
                     current_volume,
                 )
             except (ZeroDivisionError, ArithmeticError):
-                LOGGER.info(
+                LOGGER.debug(
                     "Tank %s was refilled: %.2f -> %.2f liters",
                     tank_id,
                     previous_liters,
@@ -249,7 +249,7 @@ class SuperiorPropaneDataUpdateCoordinator(DataUpdateCoordinator):
 
             # Log based on threshold validation
             if consumption_liters < min_threshold:
-                LOGGER.info(
+                LOGGER.debug(
                     "Tank %s low consumption: %.3f liters (%.4f m³) [below threshold: %.3f]",
                     tank_id,
                     consumption_liters,
@@ -334,9 +334,9 @@ class SuperiorPropaneDataUpdateCoordinator(DataUpdateCoordinator):
                     self._process_tank_consumption(tank)
                     tank_id = tank.get("tank_id")
                     if tank_id and self._data_quality_flags.get(tank_id) != "Good":
-                        LOGGER.info("Tank %s data quality: %s", tank_id, self._data_quality_flags.get(tank_id, "Unknown"))
+                        LOGGER.debug("Tank %s data quality: %s", tank_id, self._data_quality_flags.get(tank_id, "Unknown"))
                 except Exception as processing_error:
-                    LOGGER.error("Error processing tank data: %s", processing_error, exc_info=True)
+                    LOGGER.warning("Error processing tank data: %s", processing_error, exc_info=True)
 
             # Process orders totals (account-wide)
             total_litres = int(orders_totals.get("total_litres", 0))
