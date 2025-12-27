@@ -42,9 +42,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: SuperiorPropaneConfigEnt
             continue
 
         tank_id = tank_data.get("tank_id")
-        address = tank_data.get("address")
 
-        if not tank_id or not address:
+        if not tank_id:
+            LOGGER.warning("Skipping tank without tank_id: %s", tank_data)
             continue
 
         # Create all sensors for this tank
@@ -66,7 +66,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: SuperiorPropaneConfigEnt
             ]
         )
 
-    async_add_entities(entities)
+    if entities:
+        LOGGER.debug("Creating %d sensor entities", len(entities))
+        async_add_entities(entities)
+    else:
+        LOGGER.warning("No sensors created - check tank data validation")
 
 
 class SuperiorPropaneLevelSensor(SuperiorPropaneEntity, SensorEntity):

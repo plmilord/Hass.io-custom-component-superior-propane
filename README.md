@@ -81,8 +81,12 @@ Copy the `custom_components/superior_propane` to your custom_components folder. 
 
 - [ ] Ability to configure this custom component via entries in the configuration.yaml file
 - [ ] Adjust refresh rates based on reading frequency
-- [ ] Validated proper operation when there is more than one tank in the customer account
 - [ ] Add delivery switch when 'adds_delivery_date' is not declared
+- [ ] Convert gas consumption units from m³ to liters of liquid
+
+### Completed
+
+- [x] Validated proper operation when there is more than one tank in the customer account
 
 ## Inspiration / Credits
 

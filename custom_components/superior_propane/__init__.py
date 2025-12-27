@@ -27,7 +27,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SuperiorPropaneConfigEnt
     client = SuperiorPropaneApiClient(
         username=entry.data[CONF_USERNAME],
         password=entry.data[CONF_PASSWORD],
-        session=None,
+        session=session,
     )
     entry.runtime_data = SuperiorPropaneData(
         client=client,

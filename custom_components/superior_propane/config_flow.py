@@ -157,9 +157,13 @@ class SuperiorPropaneFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def _test_credentials(self, username: str, password: str) -> None:
         """Validate credentials."""
+        from homeassistant.helpers.aiohttp_client import async_get_clientsession
+        
+        session = async_get_clientsession(self.hass)
         client = SuperiorPropaneApiClient(
             username=username,
             password=password,
+            session=session,
         )
         if not await client.async_test_connection():
             raise SuperiorPropaneApiClientAuthenticationError("Invalid credentials")

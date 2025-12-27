@@ -254,7 +254,7 @@ class SuperiorPropaneApiClient:
                                     cost = round(float(price_str), 2)
                                     orders_totals['total_litres'] += litres
                                     orders_totals['total_cost'] = round(orders_totals['total_cost'] + cost, 2)
-                                    LOGGER.debug("Processed order: %d litres, %.2f $", litres, cost)
+                                    #LOGGER.debug("Processed order: %d litres, %.2f $", litres, cost)
                                 except ValueError as e:
                                     LOGGER.warning("Invalid order data: %s | Error: %s", row.text.strip(), e)
 
@@ -311,39 +311,62 @@ class SuperiorPropaneApiClient:
 
                         response_json = json.loads(data_html)
                         tank_list = json.loads(response_json.get("data", "[]"))
-                        #LOGGER.debug("Tank API data: %s", json.dumps(tank_list, indent=2)[:2000])
+                        #LOGGER.debug("Tank API data: %s", json.dumps(tank_list, indent=2)[:5000])
 
                         if not response_json.get("status"):
+                            if tanks_data and not tank_list:
+                                LOGGER.debug("API returned status=false with empty tank list - assuming all tanks retrieved")
+                                finished = True
+                                break
                             raise SuperiorPropaneApiClientError(f"Tank API error: {response_json.get('message', 'Unknown')}")
 
+                        if not tank_list:
+                            LOGGER.debug("Empty tank list received - all tanks retrieved")
+                            finished = True
+                            break
+
+                        tanks_in_batch = 0
                         for idx, tank in enumerate(tank_list, offset + 1):
                             tank_data = self._parse_tank_json(tank, idx)
                             if tank_data:
                                 tanks_data.append(tank_data)
+                                tanks_in_batch += 1
+
+                        #LOGGER.debug("Retrieved %d tanks in this batch (total: %d)", tanks_in_batch, len(tanks_data))
 
                         finished = response_json.get("finished", True)
+                        
+                        if tanks_in_batch < limit:
+                            #LOGGER.debug("Received fewer tanks than limit (%d < %d) - assuming all tanks retrieved", tanks_in_batch, limit)
+                            finished = True
+                        
                         offset += limit
-                        break  # Success
+                        break
 
                 except json.JSONDecodeError as json_error:
                     LOGGER.debug("JSON parse error (attempt %d): %s. Raw: %s", attempt, json_error, data_html[:200].replace("\n", " ").strip())
                     if attempt == MAX_API_RETRIES:
+                        if tanks_data:
+                            LOGGER.warning("JSON error but returning %d tanks already collected", len(tanks_data))
+                            return tanks_data
                         raise SuperiorPropaneApiClientError("Failed to get valid JSON after retries") from json_error
                     await asyncio.sleep(RETRY_DELAY_SECONDS + (attempt * 10))
 
                 except (asyncio.TimeoutError, SuperiorPropaneApiClientCommunicationError) as e:
                     LOGGER.debug("Error getting tanks (attempt %d): %s", attempt, e)
                     if attempt == MAX_API_RETRIES:
+                        if tanks_data:
+                            LOGGER.warning("API error but returning %d tanks already collected", len(tanks_data))
+                            return tanks_data
                         self._session_corrupted = True
-                        LOGGER.debug("Marking session as corrupted after %d failed tank attempts – will recreate on next update", MAX_API_RETRIES)
+                        LOGGER.debug("Marking session as corrupted after %d failed tank attempts", MAX_API_RETRIES)
                         raise SuperiorPropaneApiClientCommunicationError("Tank API timeout after retries")
                     await asyncio.sleep(RETRY_DELAY_SECONDS + (attempt * 10))
 
                 except SuperiorPropaneApiClientAuthenticationError:
                     raise  # Propagate for re-authentication
 
-        LOGGER.debug("Parsed %d tanks", len(tanks_data))
-        #LOGGER.debug("Parsed %d tanks: %s", len(tanks_data), json.dumps(tanks_data, indent=2)[:2000])
+        LOGGER.debug("Parsed %d tanks total", len(tanks_data))
         return tanks_data
 
     async def _login(self, csrf_token: str) -> None:
