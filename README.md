@@ -50,8 +50,8 @@ For each propane tank on your Superior Propane account, the integration provides
 
 ### Energy Dashboard Integration
 - **Total Consumption** (m³) - Cumulative gas consumption with the "total_increasing" status class
-- **Consumption Rate** (m³/h) - Current consumption rate for trend analysis
-- **Average Price Paid** (CAD/m³) - Average price paid for propane deliveries from your account
+- **Consumption Rate** (L/h) - Current consumption rate for trend analysis
+- **Average Price Paid** (CAD/L) - Average price paid for propane deliveries from your account
 
 ## What you need
 
@@ -82,10 +82,11 @@ Copy the `custom_components/superior_propane` to your custom_components folder. 
 - [ ] Ability to configure this custom component via entries in the configuration.yaml file
 - [ ] Adjust refresh rates based on reading frequency
 - [ ] Add delivery switch when 'adds_delivery_date' is not declared
-- [ ] Convert gas consumption units from m³ to liters of liquid
 
 ### Completed
 
+- [x] Convert gas consumption units from m³ to liters of liquid
+- [x] Option to allow the addition of all tanks present on your account (supervised and unsupervised)
 - [x] Validated proper operation when there is more than one tank in the customer account
 
 ## Inspiration / Credits

@@ -16,6 +16,7 @@ from .api import (
 )
 from .const import (
     CONF_ADAPTIVE_THRESHOLDS,
+    CONF_INCLUDE_UNMONITORED,
     CONF_MAX_THRESHOLD,
     CONF_MIN_THRESHOLD,
     CONF_UPDATE_INTERVAL,
@@ -62,6 +63,7 @@ class SuperiorPropaneFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                     data={
                         **user_input,
                         CONF_UPDATE_INTERVAL: user_input.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
+                        CONF_INCLUDE_UNMONITORED: user_input.get(CONF_INCLUDE_UNMONITORED, False),
                         CONF_ADAPTIVE_THRESHOLDS: user_input.get(CONF_ADAPTIVE_THRESHOLDS, True),
                         CONF_MIN_THRESHOLD: user_input.get(CONF_MIN_THRESHOLD, DEFAULT_MIN_CONSUMPTION_LITERS),
                         CONF_MAX_THRESHOLD: user_input.get(CONF_MAX_THRESHOLD, DEFAULT_MAX_CONSUMPTION_LITERS),
@@ -91,6 +93,10 @@ class SuperiorPropaneFlowHandler(config_entries.ConfigFlow, domain=DOMAIN):
                             mode=selector.NumberSelectorMode.BOX,
                         ),
                     ),
+                    vol.Optional(
+                        CONF_INCLUDE_UNMONITORED,
+                        default=False,
+                    ): selector.BooleanSelector(),
                     vol.Optional(
                         CONF_ADAPTIVE_THRESHOLDS,
                         default=True,
@@ -217,6 +223,10 @@ class SuperiorPropaneOptionsFlowHandler(config_entries.OptionsFlow):
                         mode=selector.NumberSelectorMode.BOX,
                     ),
                 ),
+                vol.Optional(
+                    CONF_INCLUDE_UNMONITORED,
+                    default=self.config_entry.data.get(CONF_INCLUDE_UNMONITORED, False),
+                ): selector.BooleanSelector(),
                 vol.Optional(
                     CONF_ADAPTIVE_THRESHOLDS,
                     default=self.config_entry.data.get(CONF_ADAPTIVE_THRESHOLDS, True),

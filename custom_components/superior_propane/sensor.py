@@ -17,7 +17,7 @@ from homeassistant.const import (
 
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, LOGGER
+from .const import CONF_INCLUDE_UNMONITORED, DOMAIN, LITERS_TO_CUBIC_METERS, LOGGER
 from .entity import SuperiorPropaneEntity
 
 if TYPE_CHECKING:
@@ -36,15 +36,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: SuperiorPropaneConfigEnt
         return
 
     entities = []
+    include_unmonitored = entry.data.get(CONF_INCLUDE_UNMONITORED, False)
 
     for tank_data in coordinator.data["tanks"]:
         if not isinstance(tank_data, dict):
             continue
 
         tank_id = tank_data.get("tank_id")
-
         if not tank_id:
             LOGGER.warning("Skipping tank without tank_id: %s", tank_data)
+            continue
+
+        is_on_delivery_plan = tank_data.get("is_on_delivery_plan", False)
+        if not include_unmonitored and not is_on_delivery_plan:
+            LOGGER.info("Skipping unmonitored tank %s (%s) - not on delivery plan", tank_id, tank_data.get("tank_name", "Unknown"))
             continue
 
         # Create all sensors for this tank
@@ -211,19 +216,21 @@ class SuperiorPropaneConsumptionTotalSensor(SuperiorPropaneEntity, SensorEntity)
         super().__init__(coordinator, tank_data)
         self._attr_unique_id = f"{DOMAIN}_{tank_data['customer_number']}_{tank_data['tank_id']}_consumption_total"
         self._attr_name = "Total Consumption"
-        self._attr_native_unit_of_measurement = "m³"
+        self._attr_native_unit_of_measurement = UnitOfVolume.LITERS
         self._attr_device_class = SensorDeviceClass.GAS
         self._attr_state_class = SensorStateClass.TOTAL_INCREASING
         self._attr_icon = "mdi:fire"
 
     @property
     def native_value(self) -> float | None:
-        """Return total consumption in cubic meter."""
+        """Return total consumption in liters."""
         tank_data = self._get_tank_data()
         if not tank_data:
             return None
 
-        return tank_data.get("consumption_total", 0.0)
+        # Convert from m³ to L
+        consumption_m3 = tank_data.get("consumption_total", 0.0)
+        return round(consumption_m3 / LITERS_TO_CUBIC_METERS, 2)
 
 
 class SuperiorPropaneConsumptionRateSensor(SuperiorPropaneEntity, SensorEntity):
@@ -237,18 +244,20 @@ class SuperiorPropaneConsumptionRateSensor(SuperiorPropaneEntity, SensorEntity):
         super().__init__(coordinator, tank_data)
         self._attr_unique_id = f"{DOMAIN}_{tank_data['customer_number']}_{tank_data['tank_id']}_consumption_rate"
         self._attr_name = "Consumption Rate"
-        self._attr_native_unit_of_measurement = "m³/h"
+        self._attr_native_unit_of_measurement = "L/h"
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = "mdi:speedometer"
 
     @property
     def native_value(self) -> float | None:
-        """Return consumption rate in cubic meter per hour."""
+        """Return consumption rate in liters per hour."""
         tank_data = self._get_tank_data()
         if not tank_data:
             return None
 
-        return tank_data.get("consumption_rate", 0.0)
+        # Convert from m³/h to L/h
+        rate_m3_h = tank_data.get("consumption_rate", 0.0)
+        return round(rate_m3_h / LITERS_TO_CUBIC_METERS, 2)
 
 
 class SuperiorPropaneDataQualitySensor(SuperiorPropaneEntity, SensorEntity):
@@ -320,7 +329,7 @@ class SuperiorPropaneAveragePriceSensor(SuperiorPropaneEntity, SensorEntity):
         super().__init__(coordinator, tank_data)
         self._attr_unique_id = f"{DOMAIN}_{tank_data['customer_number']}_{tank_data['tank_id']}_average_price"
         self._attr_name = "Average Price Paid"
-        self._attr_native_unit_of_measurement = "CAD/m³"
+        self._attr_native_unit_of_measurement = "CAD/L"
         self._attr_device_class = SensorDeviceClass.MONETARY
         self._attr_state_class = None
         self._attr_icon = "mdi:cash-multiple"

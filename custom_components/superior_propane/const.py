@@ -5,8 +5,8 @@ from logging import Logger, getLogger
 
 LOGGER: Logger = getLogger(__package__)
 
-DOMAIN = "superior_propane"
 ATTRIBUTION = "Data provided by Superior Propane"
+DOMAIN = "superior_propane"
 
 # URLs
 DASHBOARD_URL = "https://mysuperior.superiorpropane.com/dashboard"
@@ -19,35 +19,36 @@ TANK_DATA_URL = "https://mysuperior.superiorpropane.com/myaccount/readTanks"
 DEFAULT_UPDATE_INTERVAL = 7200
 
 # Configuration options
-CONF_UPDATE_INTERVAL = "update_interval"
-CONF_MIN_THRESHOLD = "min_consumption_threshold"
-CONF_MAX_THRESHOLD = "max_consumption_threshold"
 CONF_ADAPTIVE_THRESHOLDS = "adaptive_thresholds"
+CONF_INCLUDE_UNMONITORED = "include_unmonitored_tanks"
+CONF_MAX_THRESHOLD = "max_consumption_threshold"
+CONF_MIN_THRESHOLD = "min_consumption_threshold"
+CONF_UPDATE_INTERVAL = "update_interval"
 
 # Consumption threshold defaults
 # These are percentages of tank capacity per hour
-MIN_CONSUMPTION_PERCENTAGE = 0.0001  # 0.01% of tank per hour (pilot lights)
 MAX_CONSUMPTION_PERCENTAGE = 0.05    # 5% of tank per hour (extreme usage)
+MIN_CONSUMPTION_PERCENTAGE = 0.0001  # 0.01% of tank per hour (pilot lights)
 
 # Absolute bounds for safety
-ABSOLUTE_MIN_CONSUMPTION = 0.01  # Minimum 0.01 liters
 ABSOLUTE_MAX_CONSUMPTION = 50.0  # Maximum 50 liters per reading
+ABSOLUTE_MIN_CONSUMPTION = 0.01  # Minimum 0.01 liters
 
 # Default static thresholds (for backwards compatibility)
-DEFAULT_MIN_CONSUMPTION_LITERS = 0.01  # Lowered from 0.5
 DEFAULT_MAX_CONSUMPTION_LITERS = 25.0  # Raised from 10.0
+DEFAULT_MIN_CONSUMPTION_LITERS = 0.01  # Lowered from 0.5
 
 # Data validation
 DATA_VALIDATION_TOLERANCE = 0.10  # 10% tolerance for liters vs percentage validation
-TANK_SIZE_MIN = 18.0   # Minimum tank size (20 lbs = ~18 litres)
 TANK_SIZE_MAX = 227125.0 # Maximum tank size (60 000 US gallons = ~227 125 litres)
+TANK_SIZE_MIN = 18.0   # Minimum tank size (20 lbs = ~18 litres)
 
 # Unit conversions
 # 1 litre of liquid propane = ~0.2723 cubic meters of propane gas (at 60°F, 14.73 psi)
 # This is the standard conversion factor used in the propane industry, derived from 1 US gallon = 36.39 cubic feet
 LITERS_TO_CUBIC_METERS = 0.272297  # Propane litre to cubic meters conversion (at STP)
-SECONDS_PER_HOUR = 3600  # Seconds in an hour
 PERCENT_MULTIPLIER = 100.0  # For percentage calculations
+SECONDS_PER_HOUR = 3600  # Seconds in an hour
 
 # Unit for average price
 CURRENCY_PER_LITER = f"{CURRENCY_DOLLAR}/L"

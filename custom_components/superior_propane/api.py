@@ -418,6 +418,7 @@ class SuperiorPropaneApiClient:
             address = tank.get("adds_location", "Unknown")
             current_volume = tank.get("adds_fill", "Unknown")
             customer_number = tank.get("adds_customer_number", "Unknown")
+            is_on_delivery_plan = tank.get("isOnDeliveryPlan") == "1"
             last_delivery = tank.get("adds_last_fill", "Unknown").split(" ")[0]
             last_reading = tank.get("adds_last_reading", "Unknown")
             level = tank.get("adds_fill_percentage", "Unknown")
@@ -432,6 +433,7 @@ class SuperiorPropaneApiClient:
             "address": address,
             "current_volume": current_volume,
             "customer_number": customer_number,
+            "is_on_delivery_plan": is_on_delivery_plan,
             "last_delivery": last_delivery,
             "last_reading": last_reading,
             "level": level,

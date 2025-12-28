@@ -8,11 +8,14 @@
                     "username": "Adresse e-mail",
                     "password": "Mot de passe",
                     "update_interval": "Intervalle de mise à jour (secondes)",
+                    "include_unmonitored_tanks": "Inclure les réservoirs non supervisés",
                     "adaptive_thresholds": "Utiliser des seuils de consommation dynamiques",
                     "min_consumption_threshold": "Consommation minimale (litres par lecture)",
                     "max_consumption_threshold": "Consommation maximale (litres par lecture)"
                 },
                 "data_description": {
+                    "update_interval": "Fréquence de vérification des nouvelles lectures du réservoir (minimum 5 minutes).",
+                    "include_unmonitored_tanks": "Permet d'ajouter tous les réservoirs présents à votre compte (supervisés et non supervisés).",
                     "adaptive_thresholds": "Ajuste automatiquement les seuils de consommation en fonction de la taille du réservoir. Recommandé pour la plupart des utilisateurs.",
                     "min_consumption_threshold": "Utilisé uniquement lorsque les seuils dynamiques sont désactivés. Une consommation inférieure à cette valeur sera enregistrée mais journalisée.",
                     "max_consumption_threshold": "Utilisé uniquement lorsque les seuils dynamiques sont désactivés. Une consommation supérieure à cette valeur sera marquée comme anormale mais enregistrée."
@@ -36,12 +39,14 @@
                 "description": "Ajustez les paramètres de votre intégration Superior Propane.",
                 "data": {
                     "update_interval": "Intervalle de mise à jour (secondes)",
+                    "include_unmonitored_tanks": "Inclure les réservoirs non supervisés",
                     "adaptive_thresholds": "Utiliser des seuils de consommation dynamiques",
                     "min_consumption_threshold": "Consommation minimale (litres par lecture)",
                     "max_consumption_threshold": "Consommation maximale (litres par lecture)"
                 },
                 "data_description": {
                     "update_interval": "Fréquence de vérification des nouvelles lectures du réservoir (minimum 5 minutes).",
+                    "include_unmonitored_tanks": "Permet d'ajouter tous les réservoirs présents à votre compte (supervisés et non supervisés).",
                     "adaptive_thresholds": "Ajuste automatiquement les seuils de consommation en fonction de la taille du réservoir. Recommandé pour la plupart des utilisateurs.",
                     "min_consumption_threshold": "Utilisé uniquement lorsque les seuils dynamiques sont désactivés. Une consommation inférieure à cette valeur sera enregistrée mais journalisée.",
                     "max_consumption_threshold": "Utilisé uniquement lorsque les seuils dynamiques sont désactivés. Une consommation supérieure à cette valeur sera marquée comme anormale mais enregistrée."

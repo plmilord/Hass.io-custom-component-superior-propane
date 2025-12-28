@@ -5,14 +5,17 @@
                 "title": "Superior Propane",
                 "description": "Enter your Superior Propane account credentials to configure the integration.",
                 "data": {
-                    "username": "Email Address",
+                    "username": "Email address",
                     "password": "Password",
-                    "update_interval": "Update Interval (seconds)",
-                    "adaptive_thresholds": "Use Dynamic Consumption Thresholds",
-                    "min_consumption_threshold": "Minimum Consumption (liters per reading)",
-                    "max_consumption_threshold": "Maximum Consumption (liters per reading)"
+                    "update_interval": "Update interval (seconds)",
+                    "include_unmonitored_tanks": "Include unmonitored tanks",
+                    "adaptive_thresholds": "Use dynamic consumption thresholds",
+                    "min_consumption_threshold": "Minimum consumption (liters per reading)",
+                    "max_consumption_threshold": "Maximum consumption (liters per reading)"
                 },
                 "data_description": {
+                    "update_interval": "How often to check for new tank readings (minimum 5 minutes).",
+                    "include_unmonitored_tanks": "Allows you to add all the tanks present on your account (supervised and unsupervised).",
                     "adaptive_thresholds": "Automatically adjust consumption thresholds based on tank size. Recommended for most users.",
                     "min_consumption_threshold": "Only used when dynamic thresholds are disabled. Consumption below this will be logged but still recorded.",
                     "max_consumption_threshold": "Only used when dynamic thresholds are disabled. Consumption above this will be flagged as anomalous but still recorded."
@@ -35,13 +38,15 @@
                 "title": "Configure Superior Propane",
                 "description": "Adjust settings for your Superior Propane integration.",
                 "data": {
-                    "update_interval": "Update Interval (seconds)",
-                    "adaptive_thresholds": "Use Dynamic Consumption Thresholds",
-                    "min_consumption_threshold": "Minimum Consumption (liters per reading)",
-                    "max_consumption_threshold": "Maximum Consumption (liters per reading)"
+                    "update_interval": "Update interval (seconds)",
+                    "include_unmonitored_tanks": "Include unmonitored tanks",
+                    "adaptive_thresholds": "Use dynamic consumption thresholds",
+                    "min_consumption_threshold": "Minimum consumption (liters per reading)",
+                    "max_consumption_threshold": "Maximum consumption (liters per reading)"
                 },
                 "data_description": {
                     "update_interval": "How often to check for new tank readings (minimum 5 minutes).",
+                    "include_unmonitored_tanks": "Allows you to add all the tanks present on your account (supervised and unsupervised).",
                     "adaptive_thresholds": "Automatically adjust consumption thresholds based on tank size. Recommended for most users.",
                     "min_consumption_threshold": "Only used when dynamic thresholds are disabled. Consumption below this will be logged but still recorded.",
                     "max_consumption_threshold": "Only used when dynamic thresholds are disabled. Consumption above this will be flagged as anomalous but still recorded."
